@@ -2,9 +2,11 @@
 
 **Keep tabs on your tabs.**
 
-Tab Out is a Chrome extension that replaces your new tab page with a dashboard of everything you have open. Tabs are grouped by domain, with homepages (Gmail, X, LinkedIn, etc.) pulled into their own group. Close tabs with a satisfying swoosh + confetti.
+[中文说明](./README.zh-CN.md)
 
-No server. No account. No external API calls. Just a Chrome extension.
+Tab Out is a Chrome extension that replaces your new tab page with a personal workspace. It combines open-tab management with a GTD dashboard, step-by-step execution lists, focus tools, search, and a more atmospheric visual layer.
+
+No server. No account. Just a Chrome extension with local storage and lightweight background image sources.
 
 ---
 
@@ -13,7 +15,7 @@ No server. No account. No external API calls. Just a Chrome extension.
 Send your coding agent (Claude Code, Codex, etc.) this repo and say **"install this"**:
 
 ```
-https://github.com/zarazhangrui/tab-out
+https://github.com/fishandfly/tab-out
 ```
 
 The agent will walk you through it. Takes about 1 minute.
@@ -22,6 +24,11 @@ The agent will walk you through it. Takes about 1 minute.
 
 ## Features
 
+- **GTD dashboard** with a four-quadrant layout for important/urgent planning, inline task editing, drag-and-drop, and daily markdown export
+- **Pomodoro focus mode** built into the active task so you can start, pause, and reset a 25-minute session directly from the checklist panel
+- **Rotating background photography** with epic and sports themes that periodically refresh to keep the page feeling energetic
+- **Google search in the header** so every new tab can immediately become your default search entry point
+- **Motivational quotes** that rotate through a large local set of encouragement lines to keep the page optimistic and work-oriented
 - **See all your tabs at a glance** on a clean grid, grouped by domain
 - **Homepages group** pulls Gmail inbox, X home, YouTube, LinkedIn, GitHub homepages into one card
 - **Close tabs with style** with swoosh sound + confetti burst
@@ -35,12 +42,28 @@ The agent will walk you through it. Takes about 1 minute.
 
 ---
 
+## Why These Features Exist
+
+Chrome is the tool I open most often every day, so I wanted the new tab page to do more than organize tabs. I wanted the highest-frequency page in my workflow to help me focus on the work that actually matters.
+
+My time is usually fragmented, which makes it easy to stay busy without holding onto the real priority of the day. That is why this fork adds a GTD board and a Pomodoro timer directly into the new tab page: the goal is to make focus unavoidable at the exact moment I am most likely to drift.
+
+I also did not want the page to feel too rigid or mechanical. The rotating background photography and motivational quotes are there on purpose. They add a little emotional energy and help the workspace feel alive instead of purely functional.
+
+I chose Google search in the header instead of Baidu because I wanted to reduce the time lost to distracting news feeds and information streams. The idea is simple: search quickly, get what you need, and return to work.
+
+The GTD behavior is intentionally strict. If a task is not finished today, it does not automatically roll over to tomorrow. The next day starts clean. If something still matters, it must be entered again. I dislike repeated input enough that this rule becomes pressure to actually finish what I planned.
+
+That combination is what makes this new tab page my current best workspace.
+
+---
+
 ## Manual Setup
 
 **1. Clone the repo**
 
 ```bash
-git clone https://github.com/zarazhangrui/tab-out.git
+git clone https://github.com/fishandfly/tab-out.git
 ```
 
 **2. Load the Chrome extension**
@@ -87,7 +110,7 @@ You open a new tab
   -> Save tabs for later before closing them
 ```
 
-Everything runs inside the Chrome extension. No external server, no API calls, no data sent anywhere. Saved tabs are stored in `chrome.storage.local`.
+Everything runs inside the Chrome extension. There is no separate backend service, and your GTD data is stored in `chrome.storage.local`.
 
 ---
 
