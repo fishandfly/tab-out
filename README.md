@@ -56,6 +56,26 @@ You'll see Tab Out.
 
 ---
 
+## Share With Teammates
+
+Run the packaging script:
+
+```bash
+./package-extension.sh
+```
+
+It will generate a shareable zip in `release/`.
+
+Your teammates can then:
+
+1. Open `chrome://extensions`
+2. Enable **Developer mode**
+3. Unzip the package
+4. Click **Load unpacked**
+5. Select the unzipped extension folder
+
+---
+
 ## How it works
 
 ```

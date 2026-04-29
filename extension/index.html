@@ -1,17 +1,22 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tab Out</title>
 
-  <!-- Google Fonts: Newsreader (for headings/numbers) + DM Sans (for body text) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div class="background-stage" aria-hidden="true">
+  <div class="background-photo" data-background-photo-layer="0"></div>
+  <div class="background-photo" data-background-photo-layer="1"></div>
+  <div class="background-mesh"></div>
+  <div class="background-orb background-orb-a"></div>
+  <div class="background-orb background-orb-b"></div>
+  <div class="background-ribbon"></div>
+  <div class="background-grid"></div>
+</div>
 <div class="container">
 
 
@@ -25,6 +30,25 @@
       <h1 id="greeting"></h1>
       <!-- "Friday, April 4, 2026" — written by getDateDisplay() in app.js -->
       <div class="date" id="dateDisplay"></div>
+    </div>
+    <div class="header-right">
+      <form class="web-search-form" id="webSearchForm" action="https://www.google.com/search" method="get">
+        <label class="sr-only" for="webSearchInput">搜索网页</label>
+        <div class="web-search-shell">
+          <svg class="web-search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+          </svg>
+          <input
+            type="search"
+            id="webSearchInput"
+            name="q"
+            placeholder="搜索网页"
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <button type="submit">Google</button>
+        </div>
+      </form>
     </div>
   </header>
 
@@ -45,6 +69,12 @@
     </div>
     <button class="tab-cleanup-btn" data-action="close-tabout-dupes">Close extras</button>
   </div>
+
+  <!-- ================================================================
+       GTD WORKSPACE — today's quadrant board + checklist panel
+       Rendered by gtd.js + app.js
+       ================================================================ -->
+  <section class="gtd-section" id="gtdWorkspace"></section>
 
   <!-- ================================================================
        MAIN CONTENT AREA — two-column layout
@@ -113,6 +143,19 @@
 
 </div><!-- end .container -->
 
+<div class="background-credit" id="backgroundCredit" hidden>
+  <span class="background-credit-label" id="backgroundCreditLabel"></span>
+  <a
+    class="background-credit-link"
+    id="backgroundCreditLink"
+    href="#"
+    target="_blank"
+    rel="noreferrer noopener"
+  >
+    查看原图
+  </a>
+</div>
+
 <!-- ================================================================
      TOAST — floats above everything, used for action confirmations
      Hidden by default via CSS (opacity:0, translateY)
@@ -128,6 +171,9 @@
 <!-- Personal config (gitignored) — defines LOCAL_LANDING_PAGE_PATTERNS etc. -->
 <!-- If the file doesn't exist, that's fine — app.js uses sensible defaults. -->
 <script src="config.local.js" onerror="/* no personal config, that's fine */"></script>
+
+<!-- GTD logic -->
+<script src="gtd.js"></script>
 
 <!-- Main dashboard logic — loads last so the DOM is ready -->
 <script src="app.js"></script>

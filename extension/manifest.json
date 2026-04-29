@@ -1,13 +1,18 @@
 {
   "manifest_version": 3,
-  "name": "Tab Out",
+  "name": "GTD 新标签页",
   "version": "1.0.0",
-  "description": "Keep tabs on your tabs. New tab page that groups your open tabs by domain and lets you close them with style.",
+  "description": "集成四象限 GTD、步骤拆解、番茄专注、搜索与标签管理的 Chrome 新标签页。",
   "permissions": ["tabs", "activeTab", "storage"],
+  "host_permissions": [
+    "https://loremflickr.com/*",
+    "https://wallhaven.cc/*",
+    "https://*.wallhaven.cc/*"
+  ],
   "chrome_url_overrides": { "newtab": "index.html" },
   "background": { "service_worker": "background.js" },
   "action": {
-    "default_title": "Tab Out",
+    "default_title": "GTD 新标签页",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png"
