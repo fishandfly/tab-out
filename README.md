@@ -8,6 +8,8 @@ Tab Out is a Chrome extension that replaces your new tab page with a personal wo
 
 No server. No account. Just a Chrome extension with local storage and lightweight background image sources.
 
+![Tab Out screenshot](./screenshot.png)
+
 ---
 
 ## Install with a coding agent
