@@ -176,11 +176,10 @@ function loadUiPrefs() {
     if (!raw) return;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return;
-    const workspaceTab = normalizeWorkspaceTab(parsed.workspaceTab);
     uiPrefs = {
       ...uiPrefs,
       gtdCollapsed: Boolean(parsed.gtdCollapsed),
-      workspaceTab,
+      workspaceTab: 'gtd',
     };
   } catch {
     // ignore invalid persisted prefs
@@ -189,7 +188,9 @@ function loadUiPrefs() {
 
 function saveUiPrefs() {
   try {
-    localStorage.setItem(UI_PREFS_STORAGE_KEY, JSON.stringify(uiPrefs));
+    localStorage.setItem(UI_PREFS_STORAGE_KEY, JSON.stringify({
+      gtdCollapsed: uiPrefs.gtdCollapsed,
+    }));
   } catch {
     // ignore local persistence failure
   }
