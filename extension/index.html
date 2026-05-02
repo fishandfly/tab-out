@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
   <title>Tab Out</title>
 
   <link rel="stylesheet" href="style.css">
@@ -32,25 +33,15 @@
       <div class="date" id="dateDisplay"></div>
     </div>
     <div class="header-right">
-      <form class="web-search-form" id="webSearchForm" action="https://www.google.com/search" method="get">
-        <label class="sr-only" for="webSearchInput">搜索网页</label>
-        <div class="web-search-shell">
-          <svg class="web-search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
-          </svg>
-          <input
-            type="search"
-            id="webSearchInput"
-            name="q"
-            placeholder="搜索网页"
-            autocomplete="off"
-            spellcheck="false"
-          >
-          <button type="submit">Google</button>
-        </div>
-      </form>
+      <div class="header-workspace-tabs" id="workspaceTabbarMount"></div>
     </div>
   </header>
+
+  <!-- ================================================================
+       GTD WORKSPACE — today's quadrant board + checklist panel
+       Rendered by gtd.js + app.js
+       ================================================================ -->
+  <section class="gtd-section" id="gtdWorkspace"></section>
 
   <!-- ================================================================
        TAB OUT DUPES BANNER — appears when you have extra Tab Out tabs open
@@ -69,12 +60,6 @@
     </div>
     <button class="tab-cleanup-btn" data-action="close-tabout-dupes">Close extras</button>
   </div>
-
-  <!-- ================================================================
-       GTD WORKSPACE — today's quadrant board + checklist panel
-       Rendered by gtd.js + app.js
-       ================================================================ -->
-  <section class="gtd-section" id="gtdWorkspace"></section>
 
   <!-- ================================================================
        MAIN CONTENT AREA — two-column layout
@@ -167,10 +152,6 @@
   </svg>
   <span id="toastText"></span>
 </div>
-
-<!-- Personal config (gitignored) — defines LOCAL_LANDING_PAGE_PATTERNS etc. -->
-<!-- If the file doesn't exist, that's fine — app.js uses sensible defaults. -->
-<script src="config.local.js" onerror="/* no personal config, that's fine */"></script>
 
 <!-- GTD logic -->
 <script src="gtd.js"></script>

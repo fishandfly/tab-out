@@ -94,7 +94,50 @@ let activeGtdEditingStepId = '';
 let pendingGtdRenderOptions = null;
 let uiPrefs = {
   gtdCollapsed: false,
+  workspaceTab: 'gtd',
 };
+let optionalConfigLoadPromise = null;
+
+function getExtensionAssetUrl(relativePath) {
+  if (typeof chrome !== 'undefined' && chrome?.runtime?.getURL) {
+    return chrome.runtime.getURL(relativePath);
+  }
+  return relativePath;
+}
+
+function loadOptionalConfig() {
+  if (optionalConfigLoadPromise) return optionalConfigLoadPromise;
+
+  const configUrl = getExtensionAssetUrl('config.local.js');
+  optionalConfigLoadPromise = fetch(configUrl, { cache: 'no-store' })
+    .then((response) => {
+      if (!response.ok) return false;
+
+      return new Promise((resolve) => {
+        const script = document.createElement('script');
+        script.src = configUrl;
+        script.async = false;
+        script.onload = () => resolve(true);
+        script.onerror = () => resolve(false);
+        document.head.appendChild(script);
+      });
+    })
+    .catch(() => false);
+
+  return optionalConfigLoadPromise;
+}
+
+function initAssetFallbacks() {
+  if (document.documentElement.dataset.assetFallbacksBound === 'true') return;
+  document.documentElement.dataset.assetFallbacksBound = 'true';
+
+  document.addEventListener('error', (e) => {
+    const target = e.target;
+    if (target instanceof HTMLImageElement && target.dataset.hideOnError === 'true') {
+      target.style.display = 'none';
+    }
+  }, true);
+}
 
 function getGtdStorage() {
   if (typeof chrome !== 'undefined' && chrome?.storage?.local) {
@@ -123,15 +166,21 @@ function getGtdStorage() {
   };
 }
 
+function normalizeWorkspaceTab(value) {
+  return value === 'whiteboard' || value === 'notes' || value === 'structure' ? value : 'gtd';
+}
+
 function loadUiPrefs() {
   try {
     const raw = localStorage.getItem(UI_PREFS_STORAGE_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return;
+    const workspaceTab = normalizeWorkspaceTab(parsed.workspaceTab);
     uiPrefs = {
       ...uiPrefs,
       gtdCollapsed: Boolean(parsed.gtdCollapsed),
+      workspaceTab,
     };
   } catch {
     // ignore invalid persisted prefs
@@ -443,9 +492,7 @@ async function rotateBackgroundScene() {
       if (!document.body.classList.contains('has-background-photo')) {
         clearBackgroundPhoto();
       }
-      console.warn('[tab-out] Failed to refresh direct fallback background:', fallbackErr);
     }
-    console.warn('[tab-out] Failed to refresh remote background:', err);
   }
 }
 
@@ -1558,7 +1605,7 @@ function buildOverflowChips(hiddenTabs, urlCounts = {}) {
     try { domain = new URL(tab.url).hostname; } catch {}
     const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
     return `<div class="page-chip clickable${chipClass}" data-action="focus-tab" data-tab-url="${safeUrl}" title="${safeTitle}">
-      ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
+      ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" data-hide-on-error="true">` : ''}
       <span class="chip-text">${label}</span>${dupeTag}
       <div class="chip-actions">
         <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="Save for later">
@@ -1639,7 +1686,7 @@ function renderDomainCard(group) {
     try { domain = new URL(tab.url).hostname; } catch {}
     const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
     return `<div class="page-chip clickable${chipClass}" data-action="focus-tab" data-tab-url="${safeUrl}" title="${safeTitle}">
-      ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
+      ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" data-hide-on-error="true">` : ''}
       <span class="chip-text">${label}</span>${dupeTag}
       <div class="chip-actions">
         <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="Save for later">
@@ -1763,7 +1810,7 @@ function renderDeferredItem(item) {
       <input type="checkbox" class="deferred-checkbox" data-action="check-deferred" data-deferred-id="${item.id}">
       <div class="deferred-info">
         <a href="${item.url}" target="_blank" rel="noopener" class="deferred-title" title="${(item.title || '').replace(/"/g, '&quot;')}">
-          <img src="${faviconUrl}" alt="" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px" onerror="this.style.display='none'">${item.title || item.url}
+          <img src="${faviconUrl}" alt="" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px" data-hide-on-error="true">${item.title || item.url}
         </a>
         <div class="deferred-meta">
           <span>${domain}</span>
@@ -2015,6 +2062,15 @@ function restoreGtdFieldState(root, fieldState) {
   return true;
 }
 
+function syncWorkspaceTabbarMount(root) {
+  const mount = document.getElementById('workspaceTabbarMount');
+  if (!mount) return;
+
+  mount.innerHTML = '';
+  const tabbar = root?.querySelector('.workspace-tabbar');
+  if (tabbar) mount.appendChild(tabbar);
+}
+
 async function renderGtdWorkspace(options = {}) {
   const root = document.getElementById('gtdWorkspace');
   if (!root || !window.TabOutGTD) return;
@@ -2028,13 +2084,18 @@ async function renderGtdWorkspace(options = {}) {
 
   try {
     const board = await window.TabOutGTD.getTodayBoard(storage);
-    root.innerHTML = window.TabOutGTD.renderWorkspace(board, {
+    root.innerHTML = window.TabOutGTD.renderWorkspaceShell(board, {
       composerQuadrant: activeGtdComposerQuadrant,
       editingTaskId: activeGtdEditingTaskId,
       editingStepId: activeGtdEditingStepId,
       pomodoro: pomodoroState || createIdlePomodoroState(),
       collapsed: uiPrefs.gtdCollapsed,
+      activeTab: uiPrefs.workspaceTab,
+      whiteboardUrl: getExtensionAssetUrl('whiteboard/dist/index.html'),
+      notesUrl: getExtensionAssetUrl('notes/dist/index.html'),
+      structureboardUrl: getExtensionAssetUrl('structureboard/index.html'),
     });
+    syncWorkspaceTabbarMount(root);
     const restoredField = restoreGtdFieldState(root, fieldState);
 
     if (!restoredField && activeGtdEditingTaskId) {
@@ -2080,6 +2141,7 @@ async function renderGtdWorkspace(options = {}) {
         </div>
       </div>
     `;
+    syncWorkspaceTabbarMount(root);
   }
 }
 
@@ -2096,6 +2158,19 @@ function initGtdWorkspace() {
   const root = document.getElementById('gtdWorkspace');
   if (!root || root.dataset.bound === 'true') return;
   root.dataset.bound = 'true';
+
+  const tabbarMount = document.getElementById('workspaceTabbarMount');
+  tabbarMount?.addEventListener('click', async (e) => {
+    const actionEl = e.target.closest('[data-gtd-action="switch-workspace-tab"]');
+    if (!actionEl) return;
+
+    const nextTab = normalizeWorkspaceTab(actionEl.dataset.workspaceTab);
+    if (uiPrefs.workspaceTab === nextTab) return;
+
+    uiPrefs.workspaceTab = nextTab;
+    saveUiPrefs();
+    await renderGtdWorkspace();
+  });
 
   root.addEventListener('compositionstart', (e) => {
     const field = e.target;
@@ -2335,6 +2410,29 @@ function initGtdWorkspace() {
     const action = actionEl.dataset.gtdAction;
 
     try {
+      if (action === 'import-gtd-file') {
+        const file = actionEl.files?.[0];
+        actionEl.value = '';
+        if (!file) return;
+
+        const markdown = await file.text();
+        activeGtdComposerQuadrant = '';
+        activeGtdEditingTaskId = '';
+        activeGtdEditingStepId = '';
+        if (pomodoroState?.status && pomodoroState.status !== 'idle') {
+          await resetPomodoro({ skipRender: true, silent: true });
+        }
+
+        const board = window.TabOutGTD.importBoardFromMarkdown(markdown, {
+          date: window.TabOutGTD.getBoardDate(),
+        });
+        const storage = getGtdStorage();
+        await window.TabOutGTD.saveBoard(storage, board);
+        await renderGtdWorkspace();
+        showToast('日报已导入到今天');
+        return;
+      }
+
       if (action === 'toggle-task') {
         const taskId = actionEl.dataset.taskId;
         const nextBoard = await updateGtdBoard((board) =>
@@ -2360,7 +2458,7 @@ function initGtdWorkspace() {
       }
     } catch (err) {
       console.error('[tab-out] GTD change failed:', err);
-      showToast('更新 GTD 失败');
+      showToast(action === 'import-gtd-file' ? (err?.message || '导入失败，请重试') : '更新 GTD 失败');
     }
   });
 
@@ -2372,6 +2470,12 @@ function initGtdWorkspace() {
     if (action === 'toggle-task' || action === 'toggle-step') return;
 
     try {
+      if (action === 'import-gtd-report') {
+        const fileInput = root.querySelector('[data-gtd-action="import-gtd-file"]');
+        fileInput?.click();
+        return;
+      }
+
       if (action === 'export-gtd-report') {
         const storage = getGtdStorage();
         const board = await window.TabOutGTD.getTodayBoard(storage);
@@ -2383,6 +2487,15 @@ function initGtdWorkspace() {
 
       if (action === 'toggle-gtd-section') {
         uiPrefs.gtdCollapsed = !uiPrefs.gtdCollapsed;
+        saveUiPrefs();
+        await renderGtdWorkspace();
+        return;
+      }
+
+      if (action === 'switch-workspace-tab') {
+        const nextTab = normalizeWorkspaceTab(actionEl.dataset.workspaceTab);
+        if (uiPrefs.workspaceTab === nextTab) return;
+        uiPrefs.workspaceTab = nextTab;
         saveUiPrefs();
         await renderGtdWorkspace();
         return;
@@ -2541,28 +2654,6 @@ function initGtdWorkspace() {
     }
   });
 }
-
-function initHeaderSearch() {
-  const form = document.getElementById('webSearchForm');
-  const input = document.getElementById('webSearchInput');
-
-  if (!form || !input || form.dataset.bound === 'true') return;
-  form.dataset.bound = 'true';
-
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-
-    const query = input.value.trim();
-    if (!query) {
-      input.focus();
-      return;
-    }
-
-    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-    window.location.assign(url);
-  });
-}
-
 
 /* ----------------------------------------------------------------
    EVENT HANDLERS — using event delegation
@@ -2871,9 +2962,10 @@ document.addEventListener('input', async (e) => {
    INITIALIZE
    ---------------------------------------------------------------- */
 async function initializeDashboard() {
+  await loadOptionalConfig();
   loadUiPrefs();
+  initAssetFallbacks();
   initGtdWorkspace();
-  initHeaderSearch();
   initDynamicBackground();
   await loadPomodoroState();
   scheduleHeaderEncouragementRotation();

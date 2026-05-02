@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>Tab Out 结构图</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="structureboard-app" id="structureboardApp">
+    <header class="structureboard-toolbar">
+      <div class="structureboard-toolbar-copy">
+        <input
+          class="structureboard-title-input"
+          id="structureboardTitleInput"
+          type="text"
+          aria-label="结构图标题"
+          hidden
+        >
+        <h1 class="structureboard-title" id="structureboardTitle" title="双击编辑标题">结构图</h1>
+      </div>
+      <div class="structureboard-toolbar-actions">
+        <input
+          class="structureboard-file-input"
+          id="structureboardImportInput"
+          type="file"
+          accept=".drawio,.xml,text/xml,application/xml"
+          hidden
+        >
+        <button class="structureboard-toolbar-btn" id="structureboardFullscreenBtn" type="button">全屏</button>
+        <button class="structureboard-toolbar-btn" id="structureboardImportBtn" type="button">导入 .drawio</button>
+        <button class="structureboard-toolbar-btn is-primary" id="structureboardExportBtn" type="button">导出 .drawio</button>
+      </div>
+    </header>
+    <section class="structureboard-canvas-shell" id="structureboardCanvasShell">
+      <div class="structureboard-canvas" id="structureboardCanvas"></div>
+      <div class="structureboard-loading" id="structureboardLoading">正在准备 draw.io…</div>
+    </section>
+  </div>
+  <script src="./state.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

@@ -39,6 +39,7 @@
   ];
 
   const QUADRANT_MAP = Object.fromEntries(QUADRANTS.map((item) => [item.key, item]));
+  const QUADRANT_TITLE_MAP = Object.fromEntries(QUADRANTS.map((item) => [item.title, item.key]));
 
   function pad(value) {
     return String(value).padStart(2, '0');
@@ -681,6 +682,80 @@
     return `${lines.join('\n').trim()}\n`;
   }
 
+  function importBoardFromMarkdown(markdown, options = {}) {
+    const text = typeof markdown === 'string' ? markdown.replace(/\r\n?/g, '\n').trim() : '';
+    if (!text) {
+      throw new Error('导入失败：文件内容为空');
+    }
+
+    const targetDate = typeof options.date === 'string' && options.date ? options.date : getBoardDate();
+    const tasks = [];
+    let currentQuadrant = '';
+    let currentTask = null;
+    let sawQuadrant = false;
+
+    for (const rawLine of text.split('\n')) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      const quadrantMatch = line.match(/^##\s+(.+)$/);
+      if (quadrantMatch) {
+        currentQuadrant = QUADRANT_TITLE_MAP[quadrantMatch[1].trim()] || '';
+        currentTask = null;
+        sawQuadrant = sawQuadrant || Boolean(currentQuadrant);
+        continue;
+      }
+
+      if (line === '- 暂无任务' || line.startsWith('# ') || line.startsWith('日期：') || line.startsWith('完成概览：')) {
+        continue;
+      }
+
+      if (!currentQuadrant) continue;
+
+      const itemMatch = rawLine.match(/^(\s*)- \[([ xX])\] (.+)$/);
+      if (!itemMatch) continue;
+
+      const indent = itemMatch[1].length;
+      const completed = itemMatch[2].toLowerCase() === 'x';
+      const content = itemMatch[3].trim();
+      if (!content) continue;
+
+      if (indent === 0) {
+        currentTask = {
+          title: content,
+          quadrant: currentQuadrant,
+          completed,
+          checklist: [],
+        };
+        tasks.push(currentTask);
+        continue;
+      }
+
+      if (!currentTask) continue;
+      currentTask.checklist.push({
+        text: content,
+        completed,
+        level: clampChecklistLevel(Math.max(0, Math.floor(indent / 2) - 1)),
+      });
+    }
+
+    if (!sawQuadrant || !tasks.length) {
+      throw new Error('导入失败：不是可识别的 GTD 日报');
+    }
+
+    const normalized = normalizeBoard({
+      date: targetDate,
+      tasks,
+      selectedTaskId: '',
+      updatedAt: nowIso(),
+    }, targetDate);
+
+    return normalizeBoard({
+      ...normalized,
+      selectedTaskId: normalized.tasks[0]?.id || '',
+    }, targetDate);
+  }
+
   function renderWorkspace(board, options = {}) {
     const normalized = normalizeBoard(board);
     const totalTasks = normalized.tasks.length;
@@ -700,7 +775,17 @@
           <div class="section-line"></div>
           <div class="gtd-header-actions">
             <div class="section-count">${completedTasks}/${totalTasks} 已完成</div>
-            <button class="gtd-export-btn" type="button" data-gtd-action="export-gtd-report">导出日报</button>
+            <div class="gtd-header-buttons">
+              <input
+                class="gtd-file-input"
+                type="file"
+                accept=".md,.markdown,text/markdown,text/plain"
+                data-gtd-action="import-gtd-file"
+                hidden
+              >
+              <button class="gtd-header-btn" type="button" data-gtd-action="import-gtd-report">导入日报</button>
+              <button class="gtd-header-btn" type="button" data-gtd-action="export-gtd-report">导出日报</button>
+            </div>
           </div>
         </div>
         ${collapsed ? '' : `
@@ -715,6 +800,95 @@
           </section>
         </div>
         `}
+      </div>
+    `;
+  }
+
+  function renderWorkspaceShell(board, options = {}) {
+    const activeTab = options.activeTab === 'whiteboard' || options.activeTab === 'notes' || options.activeTab === 'structure'
+      ? options.activeTab
+      : 'gtd';
+    const whiteboardUrl = typeof options.whiteboardUrl === 'string' && options.whiteboardUrl
+      ? options.whiteboardUrl
+      : 'whiteboard/index.html';
+    const notesUrl = typeof options.notesUrl === 'string' && options.notesUrl
+      ? options.notesUrl
+      : 'notes/index.html';
+    const structureboardUrl = typeof options.structureboardUrl === 'string' && options.structureboardUrl
+      ? options.structureboardUrl
+      : 'structureboard/index.html';
+
+    return `
+      <div class="workspace-shell" data-workspace-active-tab="${activeTab}">
+        <div class="workspace-tabbar" role="tablist" aria-label="工作台视图">
+          <button
+            class="workspace-tab${activeTab === 'gtd' ? ' is-active' : ''}"
+            type="button"
+            role="tab"
+            aria-selected="${activeTab === 'gtd' ? 'true' : 'false'}"
+            data-gtd-action="switch-workspace-tab"
+            data-workspace-tab="gtd"
+          >GTD</button>
+          <button
+            class="workspace-tab${activeTab === 'whiteboard' ? ' is-active' : ''}"
+            type="button"
+            role="tab"
+            aria-selected="${activeTab === 'whiteboard' ? 'true' : 'false'}"
+            data-gtd-action="switch-workspace-tab"
+            data-workspace-tab="whiteboard"
+          >白板</button>
+          <button
+            class="workspace-tab${activeTab === 'notes' ? ' is-active' : ''}"
+            type="button"
+            role="tab"
+            aria-selected="${activeTab === 'notes' ? 'true' : 'false'}"
+            data-gtd-action="switch-workspace-tab"
+            data-workspace-tab="notes"
+          >笔记</button>
+          <button
+            class="workspace-tab${activeTab === 'structure' ? ' is-active' : ''}"
+            type="button"
+            role="tab"
+            aria-selected="${activeTab === 'structure' ? 'true' : 'false'}"
+            data-gtd-action="switch-workspace-tab"
+            data-workspace-tab="structure"
+          >结构图</button>
+        </div>
+        <div class="workspace-panels">
+          <section class="workspace-panel workspace-panel-gtd${activeTab === 'gtd' ? ' is-active' : ''}" role="tabpanel">
+            ${renderWorkspace(board, options)}
+          </section>
+          <section class="workspace-panel workspace-panel-whiteboard${activeTab === 'whiteboard' ? ' is-active' : ''}" role="tabpanel">
+            <div class="whiteboard-panel-shell">
+              <iframe
+                class="whiteboard-embed-frame"
+                src="${escapeHtml(whiteboardUrl)}"
+                title="Excalidraw 白板"
+                loading="lazy"
+              ></iframe>
+            </div>
+          </section>
+          <section class="workspace-panel workspace-panel-notes${activeTab === 'notes' ? ' is-active' : ''}" role="tabpanel">
+            <div class="notes-panel-shell">
+              <iframe
+                class="notes-embed-frame"
+                src="${escapeHtml(notesUrl)}"
+                title="Tiptap 笔记"
+                loading="lazy"
+              ></iframe>
+            </div>
+          </section>
+          <section class="workspace-panel workspace-panel-structure${activeTab === 'structure' ? ' is-active' : ''}" role="tabpanel">
+            <div class="structureboard-panel-shell">
+              <iframe
+                class="structureboard-embed-frame"
+                src="${escapeHtml(structureboardUrl)}"
+                title="draw.io 结构图"
+                loading="lazy"
+              ></iframe>
+            </div>
+          </section>
+        </div>
       </div>
     `;
   }
@@ -744,6 +918,8 @@
     saveBoard,
     updateTodayBoard,
     exportBoardToMarkdown,
+    importBoardFromMarkdown,
     renderWorkspace,
+    renderWorkspaceShell,
   };
 });

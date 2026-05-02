@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "GTD 新标签页",
   "version": "1.0.0",
-  "description": "集成四象限 GTD、步骤拆解、番茄专注、搜索与标签管理的 Chrome 新标签页。",
+  "description": "集成 GTD、Excalidraw 白板、Markdown 笔记、draw.io 结构图与标签管理的新标签页工作台。",
   "permissions": ["tabs", "activeTab", "storage"],
   "host_permissions": [
     "https://loremflickr.com/*",

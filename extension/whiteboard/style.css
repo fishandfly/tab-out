@@ -1,0 +1,233 @@
+:root {
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(207, 152, 116, 0.18), transparent 36%),
+    radial-gradient(circle at top right, rgba(117, 142, 165, 0.16), transparent 34%),
+    linear-gradient(180deg, #f5efe6 0%, #ede6dc 100%);
+  color: #201a16;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.whiteboard-app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+}
+
+.whiteboard-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 22px;
+  background: rgba(255, 252, 248, 0.74);
+  box-shadow: 0 16px 36px rgba(26, 22, 19, 0.08);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.whiteboard-toolbar-copy {
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.whiteboard-title,
+.whiteboard-title-input {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.whiteboard-title {
+  display: inline-block;
+  max-width: 100%;
+  cursor: text;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.whiteboard-title-input {
+  width: min(100%, 520px);
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  outline: none;
+}
+
+.whiteboard-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.whiteboard-toolbar-btn {
+  border: 1px solid rgba(33, 27, 23, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #201a16;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, opacity 0.18s ease;
+}
+
+.whiteboard-toolbar-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(26, 22, 19, 0.08);
+}
+
+.whiteboard-toolbar-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.whiteboard-toolbar-btn:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
+.whiteboard-toolbar-btn.is-primary {
+  border-color: transparent;
+  background: linear-gradient(135deg, #1f1a16 0%, #635347 100%);
+  color: white;
+}
+
+.whiteboard-canvas-shell {
+  min-height: 0;
+  border-radius: 24px;
+  overflow: hidden;
+  background: rgba(255, 253, 249, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 22px 46px rgba(26, 22, 19, 0.1);
+}
+
+.whiteboard-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.whiteboard-canvas .excalidraw {
+  height: 100%;
+}
+
+.whiteboard-loading {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #7d7067;
+  background:
+    radial-gradient(circle at 20% 12%, rgba(207, 152, 116, 0.12), transparent 28%),
+    linear-gradient(180deg, #fffdfa 0%, #f4eee6 100%);
+}
+
+@media (max-width: 720px) {
+  .whiteboard-app {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .whiteboard-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .whiteboard-toolbar h1 {
+    font-size: 24px;
+  }
+
+  .whiteboard-title-input {
+    width: 100%;
+  }
+
+  .whiteboard-toolbar-actions {
+    justify-content: stretch;
+  }
+
+  .whiteboard-toolbar-btn {
+    flex: 1 1 calc(50% - 5px);
+    text-align: center;
+  }
+
+  .whiteboard-canvas-shell {
+    border-radius: 20px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    background:
+      radial-gradient(circle at top left, rgba(184, 124, 88, 0.16), transparent 34%),
+      radial-gradient(circle at top right, rgba(88, 112, 148, 0.18), transparent 36%),
+      linear-gradient(180deg, #11161d 0%, #0b1016 100%);
+    color: #edf2f7;
+  }
+
+  .whiteboard-toolbar {
+    border-color: rgba(148, 163, 184, 0.18);
+    background: rgba(16, 23, 33, 0.78);
+    box-shadow: 0 18px 38px rgba(0, 0, 0, 0.34);
+  }
+
+  .whiteboard-toolbar-btn {
+    border-color: rgba(148, 163, 184, 0.16);
+    background: rgba(30, 41, 59, 0.78);
+    color: #edf2f7;
+  }
+
+  .whiteboard-toolbar-btn.is-primary {
+    background: linear-gradient(135deg, #d4e1f3 0%, #6c88ac 100%);
+    color: #0f1724;
+  }
+
+  .whiteboard-canvas-shell {
+    background: rgba(10, 15, 22, 0.92);
+    border-color: rgba(148, 163, 184, 0.16);
+    box-shadow: 0 24px 56px rgba(0, 0, 0, 0.38);
+  }
+
+  .whiteboard-loading {
+    color: rgba(226, 232, 240, 0.72);
+    background:
+      radial-gradient(circle at 20% 12%, rgba(184, 124, 88, 0.16), transparent 28%),
+      linear-gradient(180deg, #111827 0%, #0b1220 100%);
+  }
+}

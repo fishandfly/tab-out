@@ -18,10 +18,12 @@ const {
   updateTaskTitle,
   moveTaskToQuadrant,
   exportBoardToMarkdown,
+  importBoardFromMarkdown,
   getSelectedTask,
   getTaskProgress,
   getQuadrantTasks,
   renderWorkspace,
+  renderWorkspaceShell,
 } = require('../gtd.js');
 
 test('createEmptyBoard 为当天创建四象限空白工作板', () => {
@@ -205,6 +207,8 @@ test('renderWorkspace 把四象限放在今日 GTD 分组内的左侧列，步�
 
   assert.match(html, /class="gtd-main-row"/);
   assert.match(html, /class="gtd-board-panel"[\s\S]*class="gtd-detail-panel"/);
+  assert.match(html, /data-gtd-action="import-gtd-report"/);
+  assert.match(html, /导入日报/);
   assert.match(html, /data-gtd-action="export-gtd-report"/);
   assert.match(html, /导出日报/);
 });
@@ -217,6 +221,80 @@ test('renderWorkspace 在收起 GTD 时只保留标题栏', () => {
   assert.match(html, /data-gtd-action="toggle-gtd-section"/);
   assert.match(html, /is-collapsed/);
   assert.doesNotMatch(html, /class="gtd-main-row"/);
+});
+
+test('renderWorkspaceShell 会渲染 GTD、白板、笔记与结构图四个 tab，并默认激活 GTD', () => {
+  const html = renderWorkspaceShell(createEmptyBoard('2026-04-28'), {
+    activeTab: 'gtd',
+    whiteboardUrl: 'whiteboard/index.html',
+    notesUrl: 'notes/index.html',
+    structureboardUrl: 'structureboard/index.html',
+  });
+
+  assert.match(html, /data-gtd-action="switch-workspace-tab"/);
+  assert.match(html, /data-workspace-tab="gtd"/);
+  assert.match(html, /data-workspace-tab="whiteboard"/);
+  assert.match(html, /data-workspace-tab="notes"/);
+  assert.match(html, /data-workspace-tab="structure"/);
+  assert.match(html, /data-workspace-active-tab="gtd"/);
+  assert.match(html, /aria-selected="true"[^>]*>GTD</);
+  assert.match(html, /aria-selected="false"[^>]*>白板</);
+  assert.match(html, /aria-selected="false"[^>]*>笔记</);
+  assert.match(html, /aria-selected="false"[^>]*>结构图</);
+  assert.match(html, /src="whiteboard\/index\.html"/);
+  assert.match(html, /src="notes\/index\.html"/);
+  assert.match(html, /src="structureboard\/index\.html"/);
+});
+
+test('renderWorkspaceShell 激活白板 tab 时保留 GTD 面板并切换选中态', () => {
+  const html = renderWorkspaceShell(createEmptyBoard('2026-04-28'), {
+    activeTab: 'whiteboard',
+    whiteboardUrl: 'whiteboard/index.html',
+    notesUrl: 'notes/index.html',
+    structureboardUrl: 'structureboard/index.html',
+  });
+
+  assert.match(html, /data-workspace-active-tab="whiteboard"/);
+  assert.match(html, /aria-selected="false"[^>]*>GTD</);
+  assert.match(html, /aria-selected="true"[^>]*>白板</);
+  assert.match(html, /aria-selected="false"[^>]*>笔记</);
+  assert.match(html, /aria-selected="false"[^>]*>结构图</);
+  assert.match(html, /class="workspace-panel workspace-panel-gtd"/);
+  assert.match(html, /class="workspace-panel workspace-panel-whiteboard(?: is-active)?"/);
+  assert.match(html, /class="workspace-panel workspace-panel-notes"/);
+  assert.match(html, /class="workspace-panel workspace-panel-structure"/);
+});
+
+test('renderWorkspaceShell 激活笔记 tab 时保留其余面板并切换选中态', () => {
+  const html = renderWorkspaceShell(createEmptyBoard('2026-04-28'), {
+    activeTab: 'notes',
+    whiteboardUrl: 'whiteboard/index.html',
+    notesUrl: 'notes/index.html',
+    structureboardUrl: 'structureboard/index.html',
+  });
+
+  assert.match(html, /data-workspace-active-tab="notes"/);
+  assert.match(html, /aria-selected="false"[^>]*>GTD</);
+  assert.match(html, /aria-selected="false"[^>]*>白板</);
+  assert.match(html, /aria-selected="true"[^>]*>笔记</);
+  assert.match(html, /aria-selected="false"[^>]*>结构图</);
+  assert.match(html, /class="workspace-panel workspace-panel-notes is-active"/);
+});
+
+test('renderWorkspaceShell 激活结构图 tab 时保留其余面板并切换选中态', () => {
+  const html = renderWorkspaceShell(createEmptyBoard('2026-04-28'), {
+    activeTab: 'structure',
+    whiteboardUrl: 'whiteboard/index.html',
+    notesUrl: 'notes/index.html',
+    structureboardUrl: 'structureboard/index.html',
+  });
+
+  assert.match(html, /data-workspace-active-tab="structure"/);
+  assert.match(html, /aria-selected="false"[^>]*>GTD</);
+  assert.match(html, /aria-selected="false"[^>]*>白板</);
+  assert.match(html, /aria-selected="false"[^>]*>笔记</);
+  assert.match(html, /aria-selected="true"[^>]*>结构图</);
+  assert.match(html, /class="workspace-panel workspace-panel-structure is-active"/);
 });
 
 test('renderWorkspace 为当前任务显示番茄钟入口与倒计时', () => {
@@ -328,4 +406,92 @@ test('exportBoardToMarkdown 会导出当日任务和步骤清单', () => {
   assert.match(markdown, /    - \[ \] 确认重点问题/);
   assert.match(markdown, /## 重要不紧急/);
   assert.match(markdown, /- \[ \] 整理下周计划/);
+});
+
+test('importBoardFromMarkdown 会把日报解析成今天的工作板', () => {
+  const markdown = `# 今日 GTD 日报
+
+日期：2026-04-28
+完成概览：1/2 任务完成
+
+## 重要且紧急
+
+- [x] 完成日报导出
+  - [x] 整理今日产出
+    - [ ] 确认重点问题
+
+## 重要不紧急
+
+- [ ] 整理下周计划
+
+## 紧急不重要
+
+- 暂无任务
+
+## 不重要不紧急
+
+- 暂无任务
+`;
+
+  const board = importBoardFromMarkdown(markdown, { date: '2026-04-29' });
+
+  assert.equal(board.date, '2026-04-29');
+  assert.equal(board.tasks.length, 2);
+  assert.equal(board.tasks[0].quadrant, 'importantUrgent');
+  assert.equal(board.tasks[0].completed, true);
+  assert.equal(board.tasks[1].quadrant, 'importantNotUrgent');
+  assert.equal(board.tasks[1].completed, false);
+  assert.deepEqual(
+    board.tasks[0].checklist.map((item) => ({
+      text: item.text,
+      level: item.level,
+      completed: item.completed,
+    })),
+    [
+      { text: '整理今日产出', level: 0, completed: true },
+      { text: '确认重点问题', level: 1, completed: false },
+    ]
+  );
+  assert.equal(board.selectedTaskId, board.tasks[0].id);
+});
+
+test('importBoardFromMarkdown 会忽略空象限并保留步骤层级', () => {
+  const markdown = `# 今日 GTD 日报
+
+日期：2026-04-01
+
+## 重要且紧急
+
+- [ ] 写方案
+  - [ ] 先写提纲
+    - [x] 列出章节
+      - [ ] 收集材料
+
+## 重要不紧急
+
+- 暂无任务
+
+## 紧急不重要
+
+- 暂无任务
+
+## 不重要不紧急
+
+- 暂无任务
+`;
+
+  const board = importBoardFromMarkdown(markdown, { date: '2026-04-29' });
+
+  assert.equal(board.tasks.length, 1);
+  assert.deepEqual(
+    board.tasks[0].checklist.map((item) => item.level),
+    [0, 1, 2]
+  );
+});
+
+test('importBoardFromMarkdown 会拒绝无法识别的日报格式', () => {
+  assert.throws(
+    () => importBoardFromMarkdown('随便写点内容', { date: '2026-04-29' }),
+    /不是可识别的 GTD 日报/
+  );
 });
