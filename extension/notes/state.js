@@ -322,6 +322,43 @@
     return lines.join('\n');
   }
 
+  function serializeTaskList(node, depth) {
+    const lines = [];
+    const items = Array.isArray(node?.content) ? node.content : [];
+
+    for (const item of items) {
+      const blocks = Array.isArray(item?.content) ? item.content : [];
+      const nestedLists = [];
+      const textParts = [];
+
+      for (const block of blocks) {
+        if (block?.type === 'bulletList' || block?.type === 'orderedList' || block?.type === 'taskList') {
+          nestedLists.push(block);
+          continue;
+        }
+
+        const text = serializeBlockText(block).trim();
+        if (text) {
+          textParts.push(text);
+        }
+      }
+
+      const checked = Boolean(item?.attrs?.checked);
+      lines.push(`${'  '.repeat(depth)}- [${checked ? 'x' : ' '}] ${textParts.join(' ').trim()}`.trimEnd());
+
+      for (const nestedList of nestedLists) {
+        const nestedText = nestedList?.type === 'taskList'
+          ? serializeTaskList(nestedList, depth + 1)
+          : serializeList(nestedList, depth + 1);
+        if (nestedText) {
+          lines.push(nestedText);
+        }
+      }
+    }
+
+    return lines.join('\n');
+  }
+
   function serializeTableCell(node) {
     const parts = [];
     const blocks = Array.isArray(node?.content) ? node.content : [];
@@ -383,6 +420,8 @@
       case 'bulletList':
       case 'orderedList':
         return serializeList(node, 0);
+      case 'taskList':
+        return serializeTaskList(node, 0);
       case 'blockquote':
         return serializeBlockquote(node);
       case 'codeBlock': {
@@ -462,12 +501,23 @@
   }
 
   function parseListLine(line) {
-    const match = line.match(/^(\s*)([-*+]|\d+\.)\s+(.+)$/);
+    const match = line.match(/^(\s*)([-*+]|\d+\.)\s+(?!\[[ xX]\]\s)(.+)$/);
     if (!match) return null;
 
     return {
       indent: match[1].length,
       ordered: /\d+\./.test(match[2]),
+      text: match[3].trim(),
+    };
+  }
+
+  function parseTaskLine(line) {
+    const match = line.match(/^(\s*)-\s+\[([ xX])\]\s+(.+)$/);
+    if (!match) return null;
+
+    return {
+      indent: match[1].length,
+      checked: match[2].toLowerCase() === 'x',
       text: match[3].trim(),
     };
   }
@@ -567,12 +617,13 @@
         }
 
         const nestedInfo = parseListLine(lines[index]);
-        if (nestedInfo && nestedInfo.indent <= baseIndent) {
+        const nestedTaskInfo = parseTaskLine(lines[index]);
+        if ((nestedInfo && nestedInfo.indent <= baseIndent) || (nestedTaskInfo && nestedTaskInfo.indent <= baseIndent)) {
           break;
         }
 
-        if (nestedInfo && nestedInfo.indent > baseIndent) {
-          const nestedList = parseList(lines, index);
+        if ((nestedInfo && nestedInfo.indent > baseIndent) || (nestedTaskInfo && nestedTaskInfo.indent > baseIndent)) {
+          const nestedList = nestedTaskInfo ? parseTaskList(lines, index) : parseList(lines, index);
           if (nestedList) {
             childBlocks.push(nestedList.node);
             index = nestedList.nextIndex;
@@ -601,6 +652,84 @@
     return {
       node: {
         type: listType,
+        content: items,
+      },
+      nextIndex: index,
+    };
+  }
+
+  function parseTaskList(lines, startIndex) {
+    const first = parseTaskLine(lines[startIndex]);
+    if (!first) return null;
+
+    const baseIndent = first.indent;
+    const items = [];
+    let index = startIndex;
+
+    while (index < lines.length) {
+      const info = parseTaskLine(lines[index]);
+      if (!info || info.indent < baseIndent || info.indent !== baseIndent) {
+        break;
+      }
+
+      let itemText = info.text;
+      const childBlocks = [];
+      index += 1;
+
+      while (index < lines.length) {
+        if (isBlankLine(lines[index])) {
+          index += 1;
+          continue;
+        }
+
+        const nestedTaskInfo = parseTaskLine(lines[index]);
+        const nestedListInfo = parseListLine(lines[index]);
+        if ((nestedTaskInfo && nestedTaskInfo.indent <= baseIndent) || (nestedListInfo && nestedListInfo.indent <= baseIndent)) {
+          break;
+        }
+
+        if (nestedTaskInfo && nestedTaskInfo.indent > baseIndent) {
+          const nestedTaskList = parseTaskList(lines, index);
+          if (nestedTaskList) {
+            childBlocks.push(nestedTaskList.node);
+            index = nestedTaskList.nextIndex;
+            continue;
+          }
+        }
+
+        if (nestedListInfo && nestedListInfo.indent > baseIndent) {
+          const nestedList = parseList(lines, index);
+          if (nestedList) {
+            childBlocks.push(nestedList.node);
+            index = nestedList.nextIndex;
+            continue;
+          }
+        }
+
+        if (/^\s+/.test(lines[index])) {
+          itemText = `${itemText} ${lines[index].trim()}`.trim();
+          index += 1;
+          continue;
+        }
+
+        break;
+      }
+
+      items.push({
+        type: 'taskItem',
+        attrs: {
+          checked: info.checked,
+        },
+        content: [
+          createParagraphNode(itemText),
+          ...childBlocks,
+        ],
+      });
+    }
+
+    return {
+      node: {
+        type: 'taskList',
         content: items,
       },
       nextIndex: index,
@@ -664,6 +793,7 @@
           isHorizontalRuleLine(line) ||
           isFenceLine(line) ||
           isBlockquoteLine(line) ||
+          parseTaskLine(line) ||
           parseListLine(line) ||
           isTableStart(lines, index)
         ) {
@@ -739,6 +869,15 @@
         if (list) {
           nodes.push(list.node);
           index = list.nextIndex;
+          continue;
+        }
+      }
+
+      if (parseTaskLine(line)) {
+        const taskList = parseTaskList(lines, index);
+        if (taskList) {
+          nodes.push(taskList.node);
+          index = taskList.nextIndex;
           continue;
         }
       }

@@ -67,6 +67,21 @@ test('exportNotesDocument 会导出包含 frontmatter、列表和表格的 Markd
           ],
         },
         {
+          type: 'taskList',
+          content: [
+            {
+              type: 'taskItem',
+              attrs: { checked: false },
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: '待处理任务' }] }],
+            },
+            {
+              type: 'taskItem',
+              attrs: { checked: true },
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: '已完成任务' }] }],
+            },
+          ],
+        },
+        {
           type: 'table',
           content: [
             {
@@ -95,6 +110,8 @@ test('exportNotesDocument 会导出包含 frontmatter、列表和表格的 Markd
   assert.match(markdown, /\n正文内容\n/);
   assert.match(markdown, /- 第一项/);
   assert.match(markdown, /- 第二项/);
+  assert.match(markdown, /- \[ \] 待处理任务/);
+  assert.match(markdown, /- \[x\] 已完成任务/);
   assert.match(markdown, /\| 列一 \| 列二 \|/);
   assert.match(markdown, /\| --- \| --- \|/);
   assert.match(markdown, /\| A1 \| B1 \|/);
@@ -118,6 +135,21 @@ test('importNotesDocument 可以把导出的 Markdown 还原成可编辑文档',
             {
               type: 'listItem',
               content: [{ type: 'paragraph', content: [{ type: 'text', text: '第二项' }] }],
+            },
+          ],
+        },
+        {
+          type: 'taskList',
+          content: [
+            {
+              type: 'taskItem',
+              attrs: { checked: false },
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: '待处理任务' }] }],
+            },
+            {
+              type: 'taskItem',
+              attrs: { checked: true },
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: '已完成任务' }] }],
             },
           ],
         },
@@ -151,6 +183,39 @@ test('importNotesDocument 可以把导出的 Markdown 还原成可编辑文档',
   assert.equal(restored.title, '项目笔记');
   assert.equal(restored.type, 'tiptap');
   assert.deepEqual(restored.content, original.content);
+});
+
+test('importNotesDocument 可以解析标准 Markdown task list', () => {
+  const restored = importNotesDocument([
+    '---',
+    'title: 任务清单',
+    '---',
+    '',
+    '- [ ] 待处理任务',
+    '- [x] 已完成任务',
+  ].join('\n'));
+
+  assert.equal(restored.title, '任务清单');
+  assert.deepEqual(restored.content, {
+    type: 'doc',
+    content: [
+      {
+        type: 'taskList',
+        content: [
+          {
+            type: 'taskItem',
+            attrs: { checked: false },
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: '待处理任务' }] }],
+          },
+          {
+            type: 'taskItem',
+            attrs: { checked: true },
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: '已完成任务' }] }],
+          },
+        ],
+      },
+    ],
+  });
 });
 
 test('importNotesDocument 在缺少 frontmatter 时会回退到文件名标题', () => {

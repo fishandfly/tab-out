@@ -25,6 +25,8 @@ test('笔记构建链文件存在，并声明 Tiptap 相关依赖', () => {
   assert.ok(deps['@tiptap/extension-table-row']);
   assert.ok(deps['@tiptap/extension-table-cell']);
   assert.ok(deps['@tiptap/extension-table-header']);
+  assert.ok(deps['@tiptap/extension-task-list']);
+  assert.ok(deps['@tiptap/extension-task-item']);
   assert.ok(deps.react);
   assert.ok(deps['react-dom']);
   assert.ok(deps.vite);
@@ -48,6 +50,8 @@ test('笔记页面源码包含工具栏、Tiptap 编辑器与状态脚本接入'
   assert.match(appJsx, /TableRow/);
   assert.match(appJsx, /TableCell/);
   assert.match(appJsx, /TableHeader/);
+  assert.match(appJsx, /TaskList/);
+  assert.match(appJsx, /TaskItem/);
   assert.match(appJsx, /全屏/);
   assert.match(appJsx, /导入 \.md/);
   assert.match(appJsx, /导出 \.md/);
@@ -65,6 +69,10 @@ test('笔记页面源码包含工具栏、Tiptap 编辑器与状态脚本接入'
   assert.match(appJsx, /addColumnAfter/);
   assert.match(appJsx, /addRowAfter/);
   assert.match(appJsx, /deleteTable/);
+  assert.match(appJsx, /toggleTaskList/);
+  assert.match(appJsx, /splitListItem\('taskItem'\)/);
+  assert.match(appJsx, /editor\?\.isActive\('taskList'\)/);
+  assert.match(appJsx, /label="任务列表"/);
   assert.match(appJsx, /label="插入表格"/);
   assert.match(appJsx, /label="加列"/);
   assert.match(appJsx, /label="加行"/);
@@ -72,10 +80,18 @@ test('笔记页面源码包含工具栏、Tiptap 编辑器与状态脚本接入'
   assert.match(stateJs, /NOTES_STORAGE_KEY/);
   assert.match(stateJs, /title:/);
   assert.match(stateJs, /text\/markdown/);
+  assert.match(stateJs, /taskList/);
+  assert.match(stateJs, /taskItem/);
+  assert.match(stateJs, /checked \? 'x' : ' '/);
+  assert.match(stateJs, /function parseTaskLine/);
+  assert.match(stateJs, /checked:\s*match\[2\]\.toLowerCase\(\)\s*===\s*'x'/);
   assert.match(styleCss, /color-scheme:\s*light dark;/);
   assert.match(styleCss, /@media\s*\(prefers-color-scheme:\s*dark\)/);
   assert.match(styleCss, /\.notes-title-input/);
   assert.match(styleCss, /\.ProseMirror/);
+  assert.match(styleCss, /\.notes-editor-content ul\[data-type="taskList"\]/);
+  assert.match(styleCss, /\.notes-editor-content ul\[data-type="taskList"\] li\s*\{/);
+  assert.match(styleCss, /\.notes-editor-content ul\[data-type="taskList"\] li p\s*\{/);
   assert.match(styleCss, /\.notes-editor-btn\s*\{[\s\S]*border:\s*none;/);
   assert.match(styleCss, /\.notes-editor-btn\s*\{[\s\S]*background:\s*transparent;/);
   assert.match(styleCss, /\.notes-editor-btn\s*\{[\s\S]*box-shadow:\s*none;/);

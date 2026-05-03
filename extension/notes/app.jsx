@@ -5,6 +5,9 @@ import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TableCell } from '@tiptap/extension-table-cell';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
+import { Extension } from '@tiptap/core';
 
 const FALLBACK_STORAGE_KEY = 'tab-out-notes-global-v1';
 const FALLBACK_TITLE = '笔记';
@@ -222,6 +225,28 @@ function ToolbarButton({ label, active = false, disabled = false, onClick, child
   );
 }
 
+function toggleOrAppendTaskList(editor) {
+  if (!editor) return;
+
+  const chain = editor.chain().focus();
+  if (editor.isActive('taskList')) {
+    chain.splitListItem('taskItem').run();
+    return;
+  }
+
+  chain.toggleTaskList().run();
+}
+
+function canToggleOrAppendTaskList(editor) {
+  if (!editor) return false;
+
+  if (editor.isActive('taskList')) {
+    return editor.can().chain().focus().splitListItem('taskItem').run();
+  }
+
+  return editor.can().chain().focus().toggleTaskList().run();
+}
+
 export default function NotesApp() {
   const appHostRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -247,6 +272,27 @@ export default function NotesApp() {
       TableRow,
       TableHeader,
       TableCell,
+      TaskList,
+      TaskItem.configure({
+        nested: true,
+      }).extend({
+        content() {
+          return '(paragraph | taskList) block*';
+        },
+      }),
+      Extension.create({
+        name: 'taskTabGuard',
+        addKeyboardShortcuts() {
+          return {
+            Tab: () => {
+              const { editor } = this;
+              if (!editor.isActive('taskItem')) return false;
+              editor.chain().focus().sinkListItem('taskItem').run();
+              return true;
+            },
+          };
+        },
+      }),
     ],
     content: cloneJson(EMPTY_CONTENT),
     immediatelyRender: false,
@@ -444,6 +490,7 @@ export default function NotesApp() {
   const canUndo = Boolean(editor?.can().chain().focus().undo().run());
   const canRedo = Boolean(editor?.can().chain().focus().redo().run());
   const canInsertTable = Boolean(editor?.can().chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run());
+  const canToggleTaskList = canToggleOrAppendTaskList(editor);
   const canAddColumn = Boolean(editor?.can().chain().focus().addColumnAfter().run());
   const canAddRow = Boolean(editor?.can().chain().focus().addRowAfter().run());
   const canDeleteColumn = Boolean(editor?.can().chain().focus().deleteColumn().run());
@@ -601,6 +648,20 @@ export default function NotesApp() {
                   <path d="M10 7h8" />
                   <path d="M10 12h8" />
                   <path d="M10 17h8" />
+                </StrokeIcon>
+              </ToolbarButton>
+              <ToolbarButton
+                label="任务列表"
+                active={Boolean(editor?.isActive('taskList'))}
+                disabled={!canToggleTaskList}
+                onClick={() => toggleOrAppendTaskList(editor)}
+              >
+                <StrokeIcon>
+                  <rect x="4.8" y="5.2" width="3" height="3" rx="0.45" />
+                  <rect x="4.8" y="10.5" width="3" height="3" rx="0.45" />
+                  <path d="M10 6.7h8" />
+                  <path d="M10 12h8" />
+                  <path d="M5.6 12.1l1.1 1.1 1.9-2.2" />
                 </StrokeIcon>
               </ToolbarButton>
               <ToolbarButton
