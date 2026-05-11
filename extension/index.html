@@ -139,6 +139,8 @@
   >
     查看原图
   </a>
+  <span class="background-credit-divider"></span>
+  <button class="background-credit-link" id="backgroundSwitchBtn" type="button">换图</button>
 </div>
 
 <!-- ================================================================
@@ -153,8 +155,38 @@
   <span id="toastText"></span>
 </div>
 
+<!-- ================================================================
+     REUSE CHECKLIST DIALOG — appears when user clicks "复用"
+     Hidden by default; shown by app.js
+     ================================================================ -->
+<div class="dialog-overlay" id="reuseDialog" style="display:none">
+  <div class="dialog-box">
+    <div class="dialog-header">
+      <h3>复用 checklist</h3>
+      <button class="dialog-close-btn" type="button" data-gtd-action="close-reuse-dialog">×</button>
+    </div>
+    <input
+      type="text"
+      class="dialog-search"
+      id="reuseSearch"
+      placeholder="搜索已保存的 checklist..."
+      autocomplete="off"
+    >
+    <div class="dialog-list" id="reuseList"></div>
+  </div>
+</div>
+
+<!-- JSZip for backup ZIP creation -->
+<script src="jszip.min.js"></script>
+
+<!-- Daily auto-backup — runs silently after page load -->
+<script src="backup.js"></script>
+
 <!-- GTD logic -->
 <script src="gtd.js"></script>
+
+<!-- Micro notes (flomo-style) -->
+<script src="memo.js"></script>
 
 <!-- Main dashboard logic — loads last so the DOM is ready -->
 <script src="app.js"></script>

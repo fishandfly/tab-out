@@ -7,6 +7,7 @@
 
   const STORAGE_KEY = 'gtdBoards';
   const CHECKLIST_MAX_LEVEL = 6;
+  const SAVED_CHECKLISTS_KEY = 'tab-out-saved-checklists-v1';
   const QUADRANTS = [
     {
       key: 'importantUrgent',
@@ -47,6 +48,23 @@
 
   function getBoardDate(date = new Date()) {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+
+  function getIsoWeekNumber(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  }
+
+  function getBoardScope(date = new Date()) {
+    const weekNum = getIsoWeekNumber(date);
+    const weekStr = `W${String(weekNum).padStart(2, '0')}`;
+    return {
+      day: { key: getBoardDate(date), label: '今日 GTD' },
+      week: { key: `week-${date.getFullYear()}-${weekStr}`, label: `第 ${weekStr} 周` },
+      month: { key: `month-${date.getFullYear()}-${pad(date.getMonth() + 1)}`, label: `${date.getMonth() + 1} 月 GTD` },
+    };
   }
 
   function nowIso() {
@@ -386,6 +404,18 @@
     const existing = boards[boardDate];
     if (existing) return normalizeBoard(existing, boardDate);
 
+    // No board for today — fall back to most recent board instead of creating empty.
+    // User can manually clear with the "清空" button to start fresh.
+    const dates = Object.keys(boards).sort().reverse();
+    for (const d of dates) {
+      if (boards[d] && boards[d].tasks?.length) {
+        const result = normalizeBoard(boards[d]);
+        result.date = boardDate;
+        result.updatedAt = nowIso();
+        return result;
+      }
+    }
+
     const empty = createEmptyBoard(boardDate);
     await saveBoard(storage, empty, boards);
     return empty;
@@ -396,6 +426,52 @@
     const nextBoard = normalizeBoard(updater(current), current.date);
     await saveBoard(storage, nextBoard);
     return nextBoard;
+  }
+
+  async function getScopeBoard(storage, boardKey) {
+    const boards = await getBoards(storage);
+    const existing = boards[boardKey];
+    if (existing) return normalizeBoard(existing, boardKey);
+    return createEmptyBoard(boardKey);
+  }
+
+  async function saveScopeBoard(storage, board) {
+    const normalized = normalizeBoard(board);
+    await saveBoard(storage, normalized);
+    return normalized;
+  }
+
+  async function updateScopeBoard(storage, boardKey, updater) {
+    const current = await getScopeBoard(storage, boardKey);
+    const nextBoard = normalizeBoard(updater(current), current.date);
+    await saveBoard(storage, nextBoard);
+    return nextBoard;
+  }
+
+  async function getSavedChecklists(storage) {
+    const result = await storage.get(SAVED_CHECKLISTS_KEY);
+    const raw = result && typeof result === 'object' && result[SAVED_CHECKLISTS_KEY];
+    if (!Array.isArray(raw)) return [];
+    return raw.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async function saveSavedChecklist(storage, name, items, taskTitle) {
+    const all = await getSavedChecklists(storage);
+    const entry = {
+      id: createId('scl'),
+      name,
+      items: items.map((item) => ({ text: item.text, level: item.level })),
+      taskTitle: taskTitle || '',
+      createdAt: nowIso(),
+    };
+    all.unshift(entry);
+    await storage.set({ [SAVED_CHECKLISTS_KEY]: all });
+    return entry;
+  }
+
+  async function deleteSavedChecklist(storage, id) {
+    const all = await getSavedChecklists(storage);
+    await storage.set({ [SAVED_CHECKLISTS_KEY]: all.filter((item) => item.id !== id) });
   }
 
   function escapeHtml(value) {
@@ -560,7 +636,7 @@
     if (!selectedTask) {
       return `
         <div class="gtd-detail-card gtd-empty-card">
-          <div class="gtd-detail-eyebrow">步骤清单</div>
+          <div class="gtd-detail-eyebrow">checklist</div>
           <h3>点选左侧任务</h3>
           <p>当你从四象限里选中一个任务后，这里会显示它的执行步骤。先拆出第一步，行动会更轻松。</p>
         </div>
@@ -570,22 +646,25 @@
     const quadrant = QUADRANT_MAP[selectedTask.quadrant];
     const progress = getTaskProgress(selectedTask);
     const pomodoro = options.pomodoro || {};
+    const hasItems = selectedTask.checklist.length > 0;
 
     return `
       <div class="gtd-detail-card">
         <div class="gtd-detail-title-block">
           <div class="gtd-detail-title-row">
             <h3>${escapeHtml(selectedTask.title)}</h3>
+            ${hasItems ? `<button class="gtd-detail-save-checklist" type="button" data-gtd-action="save-checklist" data-task-id="${selectedTask.id}" title="保存 checklist 以便复用">保存 checklist</button>` : ''}
           </div>
           ${renderPomodoroTrack(selectedTask, pomodoro)}
         </div>
         <div class="gtd-detail-meta">
-          <span class="gtd-detail-badge">${quadrant.title}</span>
+          <span class="gtd-detail-badge">checklist</span>
           <span class="gtd-detail-progress">${progress.completed}/${progress.total} 步已完成</span>
         </div>
         <form class="gtd-add-form gtd-step-form" data-gtd-form="add-step" data-task-id="${selectedTask.id}">
           <input type="text" name="text" placeholder="添加一个执行步骤..." autocomplete="off">
           <button type="submit">添加</button>
+          <button class="gtd-step-reuse-btn" type="button" data-gtd-action="open-reuse-checklist" data-task-id="${selectedTask.id}" title="从已保存的 checklist 中导入">复用</button>
         </form>
         <div class="gtd-step-list">
           ${selectedTask.checklist.length ? selectedTask.checklist.map((item) => {
@@ -756,14 +835,38 @@
     }, targetDate);
   }
 
+  function renderScopeTabbar(activeScope) {
+    const tabs = [
+      { scope: 'day', label: '日' },
+      { scope: 'week', label: '周' },
+      { scope: 'month', label: '月' },
+    ];
+    return `
+      <span class="gtd-scope-tabbar" role="tablist" aria-label="时间范围">
+        ${tabs.map((t) => `
+          <button
+            class="gtd-scope-tab${activeScope === t.scope ? ' is-active' : ''}"
+            type="button"
+            role="tab"
+            aria-selected="${activeScope === t.scope ? 'true' : 'false'}"
+            data-gtd-action="switch-scope"
+            data-scope="${t.scope}"
+          >${t.label}</button>
+        `).join('')}
+      </span>
+    `;
+  }
+
   function renderWorkspace(board, options = {}) {
     const normalized = normalizeBoard(board);
     const totalTasks = normalized.tasks.length;
     const completedTasks = normalized.tasks.filter((task) => task.completed).length;
     const collapsed = Boolean(options.collapsed);
+    const activeScope = options.activeScope || 'day';
+    const scopeLabel = options.scopeLabel || '今日 GTD';
 
     return `
-      <div class="gtd-shell">
+      <div class="gtd-shell gtd-shell-${activeScope}">
         <div
           class="section-header gtd-section-header is-collapsible${collapsed ? ' is-collapsed' : ''}"
           data-gtd-action="toggle-gtd-section"
@@ -771,20 +874,13 @@
           tabindex="0"
           aria-expanded="${collapsed ? 'false' : 'true'}"
         >
-          <h2>今日 GTD</h2>
+          <h2>${escapeHtml(scopeLabel)}</h2>
           <div class="section-line"></div>
           <div class="gtd-header-actions">
             <div class="section-count">${completedTasks}/${totalTasks} 已完成</div>
             <div class="gtd-header-buttons">
-              <input
-                class="gtd-file-input"
-                type="file"
-                accept=".md,.markdown,text/markdown,text/plain"
-                data-gtd-action="import-gtd-file"
-                hidden
-              >
-              <button class="gtd-header-btn" type="button" data-gtd-action="import-gtd-report">导入日报</button>
-              <button class="gtd-header-btn" type="button" data-gtd-action="export-gtd-report">导出日报</button>
+              ${renderScopeTabbar(activeScope)}
+              <button class="gtd-header-btn gtd-header-btn-danger" type="button" data-gtd-action="clear-gtd-board">清空</button>
             </div>
           </div>
         </div>
@@ -805,7 +901,7 @@
   }
 
   function renderWorkspaceShell(board, options = {}) {
-    const activeTab = options.activeTab === 'whiteboard' || options.activeTab === 'notes' || options.activeTab === 'structure'
+    const activeTab = options.activeTab === 'whiteboard' || options.activeTab === 'notes' || options.activeTab === 'structure' || options.activeTab === 'backup' || options.activeTab === 'memo'
       ? options.activeTab
       : 'gtd';
     const whiteboardUrl = typeof options.whiteboardUrl === 'string' && options.whiteboardUrl
@@ -846,6 +942,14 @@
             data-workspace-tab="notes"
           >笔记</button>
           <button
+            class="workspace-tab${activeTab === 'memo' ? ' is-active' : ''}"
+            type="button"
+            role="tab"
+            aria-selected="${activeTab === 'memo' ? 'true' : 'false'}"
+            data-gtd-action="switch-workspace-tab"
+            data-workspace-tab="memo"
+          >微笔记</button>
+          <button
             class="workspace-tab${activeTab === 'structure' ? ' is-active' : ''}"
             type="button"
             role="tab"
@@ -853,6 +957,14 @@
             data-gtd-action="switch-workspace-tab"
             data-workspace-tab="structure"
           >结构图</button>
+          <button
+            class="workspace-tab${activeTab === 'backup' ? ' is-active' : ''}"
+            type="button"
+            role="tab"
+            aria-selected="${activeTab === 'backup' ? 'true' : 'false'}"
+            data-gtd-action="switch-workspace-tab"
+            data-workspace-tab="backup"
+          >备份</button>
         </div>
         <div class="workspace-panels">
           <section class="workspace-panel workspace-panel-gtd${activeTab === 'gtd' ? ' is-active' : ''}" role="tabpanel">
@@ -878,6 +990,9 @@
               ></iframe>
             </div>
           </section>
+          <section class="workspace-panel workspace-panel-memo${activeTab === 'memo' ? ' is-active' : ''}" role="tabpanel">
+            <div class="memo-panel-shell" id="memoPanel"></div>
+          </section>
           <section class="workspace-panel workspace-panel-structure${activeTab === 'structure' ? ' is-active' : ''}" role="tabpanel">
             <div class="structureboard-panel-shell">
               <iframe
@@ -887,6 +1002,9 @@
                 loading="lazy"
               ></iframe>
             </div>
+          </section>
+          <section class="workspace-panel workspace-panel-backup${activeTab === 'backup' ? ' is-active' : ''}" role="tabpanel">
+            <div class="backup-panel-shell" id="backupPanel"></div>
           </section>
         </div>
       </div>
@@ -917,6 +1035,13 @@
     getTodayBoard,
     saveBoard,
     updateTodayBoard,
+    getBoardScope,
+    getScopeBoard,
+    saveScopeBoard,
+    updateScopeBoard,
+    getSavedChecklists,
+    saveSavedChecklist,
+    deleteSavedChecklist,
     exportBoardToMarkdown,
     importBoardFromMarkdown,
     renderWorkspace,

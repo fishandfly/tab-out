@@ -60,6 +60,12 @@ const BACKGROUND_REMOTE_QUERIES = {
     { key: 'aurora-night', label: '极光夜空', query: 'aurora sky', categories: '100' },
     { key: 'ocean-force', label: '海面风暴', query: 'storm ocean', categories: '100' },
     { key: 'forest-ridge', label: '森林山脊', query: 'forest ridge', categories: '100' },
+    { key: 'misty-lake', label: '雾隐平湖', query: 'misty lake mountains', categories: '100' },
+    { key: 'cherry-path', label: '樱吹雪径', query: 'cherry blossom path', categories: '100' },
+    { key: 'autumn-maple', label: '秋枫古道', query: 'autumn maple forest', categories: '100' },
+    { key: 'star-desert', label: '星沙荒漠', query: 'desert night stars', categories: '100' },
+    { key: 'waterfall-green', label: '翠谷飞瀑', query: 'waterfall jungle', categories: '100' },
+    { key: 'lavender-field', label: '薰衣草田', query: 'lavender field sunset', categories: '100' },
   ],
   sport: [
     { key: 'stadium-lights', label: '球场灯火', query: 'stadium lights', categories: '101' },
@@ -68,6 +74,12 @@ const BACKGROUND_REMOTE_QUERIES = {
     { key: 'surf-energy', label: '冲浪瞬间', query: 'surf action', categories: '101' },
     { key: 'court-tension', label: '篮场张力', query: 'basketball court', categories: '101' },
     { key: 'marathon-flow', label: '晨跑动势', query: 'marathon city', categories: '101' },
+    { key: 'snowboard-air', label: '雪板腾空', query: 'snowboard jump', categories: '101' },
+    { key: 'cliff-climb', label: '峭壁攀登', query: 'rock climbing cliff', categories: '100' },
+    { key: 'yoga-dawn', label: '晨光瑜伽', query: 'yoga sunrise beach', categories: '100' },
+    { key: 'tennis-focus', label: '网前专注', query: 'tennis match', categories: '101' },
+    { key: 'swim-ocean', label: '碧波逐浪', query: 'open water swimming', categories: '100' },
+    { key: 'parkour-city', label: '城市飞跃', query: 'parkour city rooftop', categories: '100' },
   ],
 };
 let activeGtdComposerQuadrant = '';
@@ -95,6 +107,8 @@ let pendingGtdRenderOptions = null;
 let uiPrefs = {
   gtdCollapsed: false,
   workspaceTab: 'gtd',
+  activeGtdScope: 'day',
+  activeMemoTag: '',
 };
 let optionalConfigLoadPromise = null;
 
@@ -167,7 +181,7 @@ function getGtdStorage() {
 }
 
 function normalizeWorkspaceTab(value) {
-  return value === 'whiteboard' || value === 'notes' || value === 'structure' ? value : 'gtd';
+  return value === 'whiteboard' || value === 'notes' || value === 'structure' || value === 'backup' || value === 'memo' ? value : 'gtd';
 }
 
 function loadUiPrefs() {
@@ -176,10 +190,12 @@ function loadUiPrefs() {
     if (!raw) return;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return;
+    const validScopes = { day: 1, week: 1, month: 1 };
     uiPrefs = {
       ...uiPrefs,
       gtdCollapsed: Boolean(parsed.gtdCollapsed),
       workspaceTab: 'gtd',
+      activeGtdScope: validScopes[parsed.activeGtdScope] ? parsed.activeGtdScope : 'day',
     };
   } catch {
     // ignore invalid persisted prefs
@@ -190,6 +206,7 @@ function saveUiPrefs() {
   try {
     localStorage.setItem(UI_PREFS_STORAGE_KEY, JSON.stringify({
       gtdCollapsed: uiPrefs.gtdCollapsed,
+      activeGtdScope: uiPrefs.activeGtdScope,
     }));
   } catch {
     // ignore local persistence failure
@@ -460,6 +477,8 @@ function clearBackgroundPhoto() {
   });
   backgroundPhotoLayerIndex = -1;
   document.body.classList.remove('has-background-photo');
+  delete document.body.dataset.bgTheme;
+  delete document.body.dataset.bgDirection;
   updateBackgroundCredit(null);
 }
 
@@ -472,7 +491,6 @@ function applyBackgroundTheme(theme, direction = '') {
 async function rotateBackgroundScene() {
   const nextTheme = getNextBackgroundTheme(document.body.dataset.bgTheme || '', currentBackgroundDirection);
   currentBackgroundDirection = nextTheme.direction;
-  applyBackgroundTheme(nextTheme.theme, nextTheme.direction);
 
   const requestSequence = ++backgroundRequestSequence;
 
@@ -480,6 +498,7 @@ async function rotateBackgroundScene() {
     const photo = await fetchRemoteBackground(nextTheme.direction);
     await preloadBackgroundImage(photo.imageUrl);
     if (requestSequence !== backgroundRequestSequence) return;
+    applyBackgroundTheme(nextTheme.theme, nextTheme.direction);
     applyBackgroundPhoto(photo);
   } catch (err) {
     if (requestSequence !== backgroundRequestSequence) return;
@@ -488,6 +507,7 @@ async function rotateBackgroundScene() {
       if (!fallbackPhoto) throw err;
       await preloadBackgroundImage(fallbackPhoto.imageUrl);
       if (requestSequence !== backgroundRequestSequence) return;
+      applyBackgroundTheme(nextTheme.theme, nextTheme.direction);
       applyBackgroundPhoto(fallbackPhoto);
     } catch (fallbackErr) {
       if (!document.body.classList.contains('has-background-photo')) {
@@ -558,6 +578,14 @@ function initDynamicBackground() {
   backgroundThemeRotationId = window.setInterval(() => {
     void rotateBackgroundScene();
   }, BACKGROUND_THEME_ROTATION_MS);
+
+  // "换图" button click
+  const switchBtn = document.getElementById('backgroundSwitchBtn');
+  if (switchBtn) {
+    switchBtn.addEventListener('click', () => {
+      void rotateBackgroundScene();
+    });
+  }
 }
 
 function createIdlePomodoroState() {
@@ -1210,6 +1238,17 @@ function showToast(message) {
   document.getElementById('toastText').textContent = message;
   toast.classList.add('visible');
   setTimeout(() => toast.classList.remove('visible'), 2500);
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 function downloadTextFile(filename, content, mimeType = 'text/plain;charset=utf-8') {
@@ -2084,7 +2123,10 @@ async function renderGtdWorkspace(options = {}) {
   const fieldState = options.preserveActiveField ? captureGtdFieldState(root) : null;
 
   try {
-    const board = await window.TabOutGTD.getTodayBoard(storage);
+    const scopeMeta = window.TabOutGTD.getBoardScope(new Date());
+    const activeScope = uiPrefs.activeGtdScope || 'day';
+    const scopeInfo = scopeMeta[activeScope];
+    const board = await window.TabOutGTD.getScopeBoard(storage, scopeInfo.key);
     root.innerHTML = window.TabOutGTD.renderWorkspaceShell(board, {
       composerQuadrant: activeGtdComposerQuadrant,
       editingTaskId: activeGtdEditingTaskId,
@@ -2092,11 +2134,19 @@ async function renderGtdWorkspace(options = {}) {
       pomodoro: pomodoroState || createIdlePomodoroState(),
       collapsed: uiPrefs.gtdCollapsed,
       activeTab: uiPrefs.workspaceTab,
+      activeScope,
+      scopeLabel: scopeInfo.label,
       whiteboardUrl: getExtensionAssetUrl('whiteboard/dist/index.html'),
       notesUrl: getExtensionAssetUrl('notes/dist/index.html'),
       structureboardUrl: getExtensionAssetUrl('structureboard/index.html'),
     });
     syncWorkspaceTabbarMount(root);
+    if (uiPrefs.workspaceTab === 'backup') {
+      renderBackupPanel();
+    }
+    if (uiPrefs.workspaceTab === 'memo') {
+      renderMemoPanel();
+    }
     const restoredField = restoreGtdFieldState(root, fieldState);
 
     if (!restoredField && activeGtdEditingTaskId) {
@@ -2146,11 +2196,145 @@ async function renderGtdWorkspace(options = {}) {
   }
 }
 
+async function renderBackupPanel() {
+  const panel = document.getElementById('backupPanel');
+  if (!panel) return;
+
+  if (!window.TabOutBackup) {
+    panel.innerHTML = '<div class="backup-empty">备份模块未加载</div>';
+    return;
+  }
+
+  try {
+    const backups = await window.TabOutBackup.listBackups();
+    const today = new Date().toISOString().slice(0, 10);
+    const hasToday = backups.some(b => b.date === today);
+
+    let html = `
+      <div class="backup-header">
+        <h2>每日备份</h2>
+        <button class="backup-btn is-primary" id="backupNowBtn">立即备份</button>
+      </div>
+    `;
+
+    if (backups.length === 0) {
+      html += '<div class="backup-empty">暂无备份记录。点击「立即备份」创建第一份备份。</div>';
+    } else {
+      html += '<div class="backup-list">';
+      backups.sort((a, b) => b.date.localeCompare(a.date));
+      backups.forEach(b => {
+        const sizeLabel = formatBackupSize(b.size);
+        html += `
+          <div class="backup-item">
+            <div class="backup-item-info">
+              <div class="backup-item-top">
+                <span class="backup-item-date">${b.date}</span>
+                <span class="backup-item-size">${sizeLabel}</span>
+              </div>
+              ${b.summary ? `<div class="backup-item-summary">${escapeHtml(b.summary)}</div>` : ''}
+            </div>
+            <div class="backup-item-actions">
+              <button class="backup-download-btn" data-date="${b.date}">下载</button>
+            </div>
+          </div>
+        `;
+      });
+      html += '</div>';
+    }
+
+    panel.innerHTML = html;
+
+    const backupNowBtn = document.getElementById('backupNowBtn');
+    if (backupNowBtn) {
+      backupNowBtn.addEventListener('click', async () => {
+        backupNowBtn.disabled = true;
+        backupNowBtn.textContent = '备份中…';
+        await window.TabOutBackup.runNow();
+        renderBackupPanel();
+      });
+    }
+
+    panel.querySelectorAll('.backup-download-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const date = btn.dataset.date;
+        btn.disabled = true;
+        btn.textContent = '下载中…';
+        try {
+          const blob = await window.TabOutBackup.getBackup(date);
+          if (blob) {
+            downloadBlob(blob, `tab-out-backup-${date}.zip`);
+          }
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '下载';
+        }
+      });
+    });
+  } catch (_) {
+    panel.innerHTML = '<div class="backup-empty">备份列表加载失败</div>';
+  }
+}
+
+function formatBackupSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function renderMemoPanel() {
+  const panel = document.getElementById('memoPanel');
+  if (!panel || !window.TabOutMemo) return;
+
+  try {
+    const storage = getGtdStorage();
+    const memos = await window.TabOutMemo.getMemos(storage);
+    panel.innerHTML = window.TabOutMemo.renderMemoPanel(memos, {
+      activeTag: uiPrefs.activeMemoTag || '',
+    });
+  } catch (err) {
+    console.error('[tab-out] Failed to render memo panel:', err);
+    panel.innerHTML = '<div class="memo-empty">微笔记加载失败</div>';
+  }
+}
+
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function renderReuseList(container, savedChecklists, query = '') {
+  const q = query.trim().toLowerCase();
+  const filtered = q ? savedChecklists.filter((item) =>
+    item.name.toLowerCase().includes(q) ||
+    (item.taskTitle || '').toLowerCase().includes(q)
+  ) : savedChecklists;
+
+  if (!filtered.length) {
+    container.innerHTML = '<div class="dialog-empty">暂无匹配的 checklist</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map((item) => `
+    <div class="dialog-item" data-gtd-action="apply-saved-checklist" data-checklist-id="${item.id}">
+      <div class="dialog-item-title">${escapeHtml(item.name)}</div>
+      <div class="dialog-item-meta">
+        ${item.taskTitle ? `<span>任务: ${escapeHtml(item.taskTitle)}</span>` : ''}
+        <span>${item.items.length} 步</span>
+        <span>${new Date(item.createdAt).toLocaleDateString('zh-CN')}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
 async function updateGtdBoard(mutator) {
   const storage = getGtdStorage();
-  const current = await window.TabOutGTD.getTodayBoard(storage);
+  const scopeMeta = window.TabOutGTD.getBoardScope(new Date());
+  const activeScope = uiPrefs.activeGtdScope || 'day';
+  const scopeInfo = scopeMeta[activeScope];
+  const current = await window.TabOutGTD.getScopeBoard(storage, scopeInfo.key);
   const nextBoard = window.TabOutGTD.normalizeBoard(mutator(current), current.date);
-  await window.TabOutGTD.saveBoard(storage, nextBoard);
+  await window.TabOutGTD.saveScopeBoard(storage, nextBoard);
   await renderGtdWorkspace();
   return nextBoard;
 }
@@ -2478,11 +2662,47 @@ function initGtdWorkspace() {
       }
 
       if (action === 'export-gtd-report') {
+        if (uiPrefs.activeGtdScope !== 'day') return;
         const storage = getGtdStorage();
         const board = await window.TabOutGTD.getTodayBoard(storage);
         const markdown = window.TabOutGTD.exportBoardToMarkdown(board);
         downloadTextFile(`gtd-daily-report-${board.date}.md`, markdown, 'text/markdown;charset=utf-8');
         showToast('日报已导出为 Markdown');
+        return;
+      }
+
+      if (action === 'clear-gtd-board') {
+        const scopeLabels = { day: '今天', week: '本周', month: '本月' };
+        const scopeLabel = scopeLabels[uiPrefs.activeGtdScope] || '今天';
+        const confirmed = confirm(`确定清空${scopeLabel}的所有 GTD 任务吗？此操作不可撤销。`);
+        if (!confirmed) return;
+        const storage = getGtdStorage();
+        const scopeMeta = window.TabOutGTD.getBoardScope(new Date());
+        const scopeInfo = scopeMeta[uiPrefs.activeGtdScope || 'day'];
+        const board = await window.TabOutGTD.getScopeBoard(storage, scopeInfo.key);
+        board.tasks = [];
+        board.selectedTaskId = '';
+        board.updatedAt = new Date().toISOString();
+        await window.TabOutGTD.saveScopeBoard(storage, board);
+        await renderGtdWorkspace();
+        showToast(`${scopeLabel} GTD 已清空`);
+        return;
+      }
+
+      if (action === 'switch-scope') {
+        const scope = actionEl.dataset.scope;
+        if (scope !== 'day' && scope !== 'week' && scope !== 'month') return;
+        if (uiPrefs.activeGtdScope === scope) return;
+        activeGtdComposerQuadrant = '';
+        activeGtdEditingTaskId = '';
+        activeGtdEditingStepId = '';
+        if (pomodoroState?.status && pomodoroState.status !== 'idle') {
+          await resetPomodoro({ skipRender: true, silent: true });
+        }
+        uiPrefs.activeGtdScope = scope;
+        saveUiPrefs();
+        await renderGtdWorkspace();
+        showToast(scope === 'day' ? '切换日视图' : scope === 'week' ? '切换周视图' : '切换月视图');
         return;
       }
 
@@ -2551,6 +2771,36 @@ function initGtdWorkspace() {
         await updateGtdBoard((board) => window.TabOutGTD.deleteChecklistItem(board, taskId, stepId));
         showToast('步骤已删除');
       }
+
+      if (action === 'save-checklist') {
+        const taskId = actionEl.dataset.taskId;
+        if (!taskId) return;
+        const storage = getGtdStorage();
+        const scopeMeta = window.TabOutGTD.getBoardScope(new Date());
+        const scopeInfo = scopeMeta[uiPrefs.activeGtdScope || 'day'];
+        const board = await window.TabOutGTD.getScopeBoard(storage, scopeInfo.key);
+        const task = board.tasks.find((t) => t.id === taskId);
+        if (!task || !task.checklist.length) return;
+        const name = `${task.title} (${task.checklist.length} 步)`;
+        await window.TabOutGTD.saveSavedChecklist(storage, name, task.checklist, task.title);
+        showToast('checklist 已保存');
+      }
+
+      if (action === 'open-reuse-checklist') {
+        const taskId = actionEl.dataset.taskId;
+        if (!taskId) return;
+        const dialog = document.getElementById('reuseDialog');
+        const list = document.getElementById('reuseList');
+        const search = document.getElementById('reuseSearch');
+        if (!dialog || !list) return;
+        const storage = getGtdStorage();
+        const saved = await window.TabOutGTD.getSavedChecklists(storage);
+        dialog.dataset.targetTaskId = taskId;
+        search.value = '';
+        renderReuseList(list, saved);
+        dialog.style.display = 'flex';
+        setTimeout(() => search.focus(), 50);
+      }
     } catch (err) {
       console.error('[tab-out] GTD click failed:', err);
       showToast('处理 GTD 操作失败');
@@ -2585,7 +2835,9 @@ function initGtdWorkspace() {
         activeGtdEditingStepId = '';
 
         const storage = getGtdStorage();
-        const board = await window.TabOutGTD.getTodayBoard(storage);
+        const scopeMeta = window.TabOutGTD.getBoardScope(new Date());
+        const scopeInfo = scopeMeta[uiPrefs.activeGtdScope || 'day'];
+        const board = await window.TabOutGTD.getScopeBoard(storage, scopeInfo.key);
         if (board.selectedTaskId !== taskId) {
           await updateGtdBoard((currentBoard) => window.TabOutGTD.selectTask(currentBoard, taskId));
         } else {
@@ -2654,7 +2906,135 @@ function initGtdWorkspace() {
       await renderGtdWorkspace();
     }
   });
+
+  /* -- Memo (微笔记) event handlers -- */
+  root.addEventListener('submit', async (e) => {
+    const form = e.target.closest('form[data-memo-form="add-memo"]');
+    if (!form) return;
+    e.preventDefault();
+
+    const textarea = form.querySelector('textarea[name="content"]');
+    const content = textarea?.value?.trim();
+    if (!content) return;
+
+    try {
+      const storage = getGtdStorage();
+      await window.TabOutMemo.addMemo(storage, content);
+      textarea.value = '';
+      await renderGtdWorkspace();
+      showToast('微笔记已记录');
+    } catch (err) {
+      console.error('[tab-out] Failed to add memo:', err);
+      showToast('记录失败');
+    }
+  });
+
+  root.addEventListener('keydown', async (e) => {
+    const textarea = e.target.closest('textarea[name="content"]');
+    if (!textarea) return;
+    if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return;
+
+    const form = textarea.closest('form[data-memo-form="add-memo"]');
+    if (!form) return;
+
+    e.preventDefault();
+    form.requestSubmit();
+  });
+
+  root.addEventListener('click', async (e) => {
+    const actionEl = e.target.closest('[data-memo-action]');
+    if (!actionEl) return;
+
+    const action = actionEl.dataset.memoAction;
+
+    if (action === 'delete-memo') {
+      const memoId = actionEl.dataset.memoId;
+      if (!memoId) return;
+
+      try {
+        const storage = getGtdStorage();
+        await window.TabOutMemo.deleteMemo(storage, memoId);
+        await renderGtdWorkspace();
+        showToast('微笔记已删除');
+      } catch (err) {
+        console.error('[tab-out] Failed to delete memo:', err);
+        showToast('删除失败');
+      }
+      return;
+    }
+
+    if (action === 'filter-tag') {
+      const tag = actionEl.dataset.memoTag || '';
+      uiPrefs.activeMemoTag = tag || '';
+      await renderGtdWorkspace();
+      if (tag) {
+        const textarea = document.querySelector('#memoPanel textarea[name="content"]');
+        if (textarea) {
+          textarea.value = '#' + tag + ' ';
+          textarea.focus();
+        }
+      }
+      return;
+    }
+  });
 }
+
+/* -- Reuse checklist dialog -- */
+document.addEventListener('click', async (e) => {
+  const dialog = document.getElementById('reuseDialog');
+  if (!dialog || dialog.style.display === 'none') return;
+
+  // Click outside dialog box closes it
+  if (e.target === dialog) {
+    dialog.style.display = 'none';
+    return;
+  }
+
+  const actionEl = e.target.closest('[data-gtd-action="close-reuse-dialog"], [data-gtd-action="apply-saved-checklist"]');
+  if (!actionEl) return;
+  const action = actionEl.dataset.gtdAction;
+
+  if (action === 'close-reuse-dialog') {
+    const dialog = document.getElementById('reuseDialog');
+    if (dialog) dialog.style.display = 'none';
+    return;
+  }
+
+  if (action === 'apply-saved-checklist') {
+    const dialog = document.getElementById('reuseDialog');
+    const storage = getGtdStorage();
+    const saved = await window.TabOutGTD.getSavedChecklists(storage);
+    const entry = saved.find((item) => item.id === actionEl.dataset.checklistId);
+    if (!entry) return;
+
+    const taskId = dialog?.dataset.targetTaskId || '';
+    if (taskId && entry.items.length) {
+      await updateGtdBoard((board) => {
+        let result = board;
+        for (const item of entry.items) {
+          result = window.TabOutGTD.addChecklistItem(result, taskId, item.text);
+        }
+        return result;
+      });
+      showToast(`已导入 ${entry.items.length} 步`);
+    }
+
+    dialog.style.display = 'none';
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  const search = e.target.closest('#reuseSearch');
+  if (!search) return;
+  const list = document.getElementById('reuseList');
+  if (!list) return;
+  clearTimeout(search._searchTimer);
+  search._searchTimer = setTimeout(async () => {
+    const storage = getGtdStorage();
+    const saved = await window.TabOutGTD.getSavedChecklists(storage);
+    renderReuseList(list, saved, search.value);
+  }, 150);
+});
 
 /* ----------------------------------------------------------------
    EVENT HANDLERS — using event delegation
