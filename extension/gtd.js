@@ -634,6 +634,28 @@
     return touchBoard(normalized, tasks, normalized.selectedTaskId);
   }
 
+  function isKanbanTaskExpanded(expandedKanbanTasks, laneKey, taskId) {
+    if (!expandedKanbanTasks || typeof expandedKanbanTasks !== 'object' || !taskId) return false;
+    const laneTaskKey = laneKey ? `${laneKey}:${taskId}` : '';
+    if (laneTaskKey && typeof expandedKanbanTasks[laneTaskKey] === 'boolean') {
+      return expandedKanbanTasks[laneTaskKey];
+    }
+    if (typeof expandedKanbanTasks[taskId] === 'boolean') {
+      return expandedKanbanTasks[taskId];
+    }
+    return false;
+  }
+
+  function preserveKanbanTaskExpandState(expandedKanbanTasks, taskId, sourceLane, targetLane) {
+    const next = expandedKanbanTasks && typeof expandedKanbanTasks === 'object' ? { ...expandedKanbanTasks } : {};
+    if (!taskId || !targetLane) return next;
+    const wasExpanded = isKanbanTaskExpanded(next, sourceLane, taskId);
+    const targetKey = `${targetLane}:${taskId}`;
+    next[targetKey] = wasExpanded;
+    next[taskId] = wasExpanded;
+    return next;
+  }
+
   function getChecklistSubtreeEndIndex(checklist, startIndex) {
     const rootItem = checklist[startIndex];
     if (!rootItem) return startIndex;
@@ -2360,7 +2382,7 @@
             if (isTaskInLane || laneSteps.length > 0) {
               const quadTitle = titleConfig[task.quadrant] || DEFAULT_QUADRANT_TITLES[task.quadrant] || '任务';
               const taskKey = `${lane.key}:${task.id}`;
-              const isTaskExpanded = Boolean(options.expandedKanbanTasks?.[taskKey] || options.expandedKanbanTasks?.[task.id]);
+              const isTaskExpanded = isKanbanTaskExpanded(options.expandedKanbanTasks, lane.key, task.id);
 
               const laneStepMeta = lane.key === 'done'
                 ? laneSteps.map(() => ({ isVisible: true, hasChildren: false, isExpanded: false }))
@@ -2650,6 +2672,8 @@
     KANBAN_LANE_MAP,
     VALID_KANBAN_STATUSES,
     normalizeKanbanStatus,
+    isKanbanTaskExpanded,
+    preserveKanbanTaskExpandState,
     updateTaskKanbanStatus,
     updateChecklistItemKanbanStatus,
     updateTaskEmoji,

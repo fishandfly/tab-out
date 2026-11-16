@@ -2048,11 +2048,41 @@ function initGtdWorkspace() {
 
         try {
           if (stepId) {
+            if (window.TabOutGTD?.preserveKanbanTaskExpandState) {
+              uiPrefs.expandedKanbanTasks = window.TabOutGTD.preserveKanbanTaskExpandState(
+                uiPrefs.expandedKanbanTasks,
+                taskId,
+                sourceLane,
+                targetLane
+              );
+              saveUiPrefs();
+            }
             await updateGtdBoard((board) =>
               window.TabOutGTD.updateChecklistItemKanbanStatus(board, taskId, stepId, targetLane)
             );
             showToast(`步骤已移动至「${targetLaneTitle}」`);
           } else {
+            // 整体移动任务到目标泳道：保留任务在看板中的展开与折叠状态
+            if (window.TabOutGTD?.preserveKanbanTaskExpandState) {
+              uiPrefs.expandedKanbanTasks = window.TabOutGTD.preserveKanbanTaskExpandState(
+                uiPrefs.expandedKanbanTasks,
+                taskId,
+                sourceLane,
+                targetLane
+              );
+            } else {
+              uiPrefs.expandedKanbanTasks = uiPrefs.expandedKanbanTasks || {};
+              const sourceKey = sourceLane ? `${sourceLane}:${taskId}` : '';
+              const wasExpanded = Boolean(
+                (sourceKey && typeof uiPrefs.expandedKanbanTasks[sourceKey] === 'boolean'
+                  ? uiPrefs.expandedKanbanTasks[sourceKey]
+                  : undefined) ?? uiPrefs.expandedKanbanTasks[taskId]
+              );
+              uiPrefs.expandedKanbanTasks[`${targetLane}:${taskId}`] = wasExpanded;
+              uiPrefs.expandedKanbanTasks[taskId] = wasExpanded;
+            }
+            saveUiPrefs();
+
             const nextBoard = await updateGtdBoard((board) =>
               window.TabOutGTD.updateTaskKanbanStatus(board, taskId, targetLane)
             );
@@ -2481,7 +2511,12 @@ function initGtdWorkspace() {
         if (!taskId) return;
         const key = lane ? `${lane}:${taskId}` : taskId;
         uiPrefs.expandedKanbanTasks = uiPrefs.expandedKanbanTasks || {};
-        uiPrefs.expandedKanbanTasks[key] = !uiPrefs.expandedKanbanTasks[key];
+        const currentlyExpanded = window.TabOutGTD?.isKanbanTaskExpanded
+          ? window.TabOutGTD.isKanbanTaskExpanded(uiPrefs.expandedKanbanTasks, lane, taskId)
+          : Boolean(uiPrefs.expandedKanbanTasks[key] ?? uiPrefs.expandedKanbanTasks[taskId]);
+        const nextState = !currentlyExpanded;
+        uiPrefs.expandedKanbanTasks[key] = nextState;
+        uiPrefs.expandedKanbanTasks[taskId] = nextState;
         saveUiPrefs();
         await renderGtdWorkspace();
         return;

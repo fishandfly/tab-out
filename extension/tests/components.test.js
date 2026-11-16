@@ -323,4 +323,5 @@ test('app.js 支持看板泳道整体任务与步骤拖拽事件监听', () => {
   assert.match(code, /updateChecklistItemKanbanStatus/);
   assert.match(code, /data-gtd-drop-lane/);
   assert.match(code, /activeGtdKanbanDragState/);
+  assert.match(code, /preserveKanbanTaskExpandState/);
 });

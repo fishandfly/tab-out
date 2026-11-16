@@ -46,6 +46,8 @@ const {
   getQuadrants,
   KANBAN_LANES,
   normalizeKanbanStatus,
+  isKanbanTaskExpanded,
+  preserveKanbanTaskExpandState,
   updateTaskKanbanStatus,
   updateChecklistItemKanbanStatus,
   updateTaskEmoji,
@@ -1618,6 +1620,60 @@ test('Kanban 任务卡片与步骤卡片支持 tips 方式完整显示长名称'
   assert.match(kanbanHtml, new RegExp(`title="${longStepText}"`));
   assert.match(kanbanHtml, /class="gtd-kanban-step-text"[^>]*title="/);
 });
+
+test('preserveKanbanTaskExpandState 拖拽到新泳道时保持任务的展开和折叠状态', () => {
+  let board = addTask(createEmptyBoard('2026-06-01'), 'importantUrgent', '长春市一张图开发');
+  const taskId = board.tasks[0].id;
+  board = addChecklistItems(board, taskId, ['步骤1', '步骤2']);
+
+  // 1. 默认情况下任务未展开
+  let expandedPrefs = {};
+  assert.equal(isKanbanTaskExpanded(expandedPrefs, 'todo', taskId), false);
+
+  // 2. 在「待完成」(todo) 泳道展开任务
+  expandedPrefs[`todo:${taskId}`] = true;
+  expandedPrefs[taskId] = true;
+  assert.equal(isKanbanTaskExpanded(expandedPrefs, 'todo', taskId), true);
+
+  // 3. 将任务从 todo 拖拽到 planned（今日计划）：展开状态完整保留！
+  expandedPrefs = preserveKanbanTaskExpandState(expandedPrefs, taskId, 'todo', 'planned');
+  assert.equal(expandedPrefs[`planned:${taskId}`], true);
+  assert.equal(expandedPrefs[taskId], true);
+  assert.equal(isKanbanTaskExpanded(expandedPrefs, 'planned', taskId), true);
+
+  // 移动看板状态并验证渲染出的 HTML 处于展开态（包含 is-expanded 且无 style="display: none;"）
+  board = updateTaskKanbanStatus(board, taskId, 'planned');
+  const plannedHtml = renderKanbanBoard(board, { expandedKanbanTasks: expandedPrefs });
+  const plannedSection = plannedHtml.slice(
+    plannedHtml.indexOf('data-gtd-drop-lane="planned"'),
+    plannedHtml.indexOf('data-gtd-drop-lane="doing"')
+  );
+  assert.match(plannedSection, /class="gtd-kanban-group-steps is-expanded"/);
+  assert.doesNotMatch(plannedSection, /class="gtd-kanban-group-steps[^>]*display:\s*none/);
+  assert.match(plannedSection, /aria-expanded="true"/);
+
+  // 4. 用户在 planned 泳道点击折叠任务
+  expandedPrefs[`planned:${taskId}`] = false;
+  expandedPrefs[taskId] = false;
+  assert.equal(isKanbanTaskExpanded(expandedPrefs, 'planned', taskId), false);
+
+  // 5. 将任务从 planned 拖拽到 doing（开始工作）：折叠状态同样完整保留！
+  expandedPrefs = preserveKanbanTaskExpandState(expandedPrefs, taskId, 'planned', 'doing');
+  assert.equal(expandedPrefs[`doing:${taskId}`], false);
+  assert.equal(expandedPrefs[taskId], false);
+  assert.equal(isKanbanTaskExpanded(expandedPrefs, 'doing', taskId), false);
+
+  board = updateTaskKanbanStatus(board, taskId, 'doing');
+  const doingHtml = renderKanbanBoard(board, { expandedKanbanTasks: expandedPrefs });
+  const doingSection = doingHtml.slice(
+    doingHtml.indexOf('data-gtd-drop-lane="doing"'),
+    doingHtml.indexOf('data-gtd-drop-lane="done"')
+  );
+  assert.match(doingSection, /class="gtd-kanban-group-steps is-collapsed"/);
+  assert.match(doingSection, /style="display: none;"/);
+  assert.match(doingSection, /aria-expanded="false"/);
+});
+
 
 
 
