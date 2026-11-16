@@ -121,6 +121,118 @@
   }
 
   /* ----------------------------------------------------------------
+     GTD EMOJI PICKER DIALOG
+     ---------------------------------------------------------------- */
+  const QUICK_EMOJIS = [
+    '🔥', '⭐', '⚡', '🚀', '🎯', '💡', '📌', '🚩',
+    '✅', '⏳', '💻', '📝', '🛠️', '🎨', '📊', '📦',
+    '❤️', '☕', '🌟', '⚠️', '🐛', '🔍', '📅', '🎉',
+    '🙂', '👍', '💪', '🏃', '📚', '💬', '📞', '✨',
+  ];
+
+  async function openEmojiDialog(taskId, stepId = '') {
+    const dialog = document.getElementById('emojiPickerDialog');
+    if (!dialog) return;
+
+    dialog.dataset.targetTaskId = taskId || '';
+    dialog.dataset.targetStepId = stepId || '';
+
+    const labelEl = document.getElementById('emojiPickerTargetLabel');
+    const gridEl = document.getElementById('emojiPickerGrid');
+    const inputEl = document.getElementById('emojiCustomInput');
+
+    let targetTitle = '';
+    let currentEmoji = '';
+    try {
+      const storage = _getStorage ? _getStorage() : null;
+      const scopeMeta = window.TabOutGTD?.getBoardScope ? window.TabOutGTD.getBoardScope(new Date()) : null;
+      const activeScope = typeof _getActiveScope === 'function' ? _getActiveScope() : 'day';
+      const currentScopeInfo = scopeMeta ? scopeMeta[activeScope || 'day'] : null;
+      if (storage && currentScopeInfo && window.TabOutGTD?.getScopeBoard) {
+        const board = await window.TabOutGTD.getScopeBoard(storage, currentScopeInfo.key);
+        const task = board?.tasks?.find((t) => t.id === taskId);
+        if (task) {
+          if (stepId && Array.isArray(task.checklist)) {
+            const step = task.checklist.find((s) => s.id === stepId);
+            if (step) {
+              targetTitle = step.text;
+              currentEmoji = step.emoji || '';
+            }
+          } else {
+            targetTitle = task.title;
+            currentEmoji = task.emoji || '';
+          }
+        }
+      }
+    } catch (_) {}
+
+    if (labelEl) {
+      if (targetTitle) {
+        const truncated = targetTitle.length > 12 ? `${targetTitle.slice(0, 12)}…` : targetTitle;
+        labelEl.textContent = stepId ? `步骤: ${truncated}` : `任务: ${truncated}`;
+        labelEl.style.display = 'inline-block';
+      } else {
+        labelEl.style.display = 'none';
+      }
+    }
+
+    if (gridEl) {
+      gridEl.innerHTML = QUICK_EMOJIS.map((emoji) => `
+        <button
+          class="gtd-emoji-quick-btn${emoji === currentEmoji ? ' is-selected' : ''}"
+          type="button"
+          data-gtd-action="select-quick-emoji"
+          data-emoji="${emoji}"
+          title="${emoji}"
+        >${emoji}</button>
+      `).join('');
+    }
+
+    if (inputEl) {
+      inputEl.value = currentEmoji || '';
+    }
+
+    dialog.style.display = 'flex';
+    setTimeout(() => {
+      if (inputEl) inputEl.focus();
+    }, 50);
+  }
+
+  function closeEmojiDialog() {
+    const dialog = document.getElementById('emojiPickerDialog');
+    if (dialog) {
+      dialog.style.display = 'none';
+      dialog.dataset.targetTaskId = '';
+      dialog.dataset.targetStepId = '';
+    }
+  }
+
+  async function applyEmoji(emoji) {
+    const dialog = document.getElementById('emojiPickerDialog');
+    const taskId = dialog?.dataset.targetTaskId;
+    const stepId = dialog?.dataset.targetStepId || '';
+    if (!taskId) {
+      closeEmojiDialog();
+      return;
+    }
+
+    const cleanEmoji = typeof emoji === 'string' ? emoji.trim() : '';
+
+    if (typeof _updateBoard === 'function') {
+      await _updateBoard((board) => {
+        if (stepId) {
+          return window.TabOutGTD.updateChecklistItemEmoji(board, taskId, stepId, cleanEmoji);
+        }
+        return window.TabOutGTD.updateTaskEmoji(board, taskId, cleanEmoji);
+      });
+      if (typeof _showToast === 'function') {
+        _showToast(cleanEmoji ? `已设置表情 ${cleanEmoji}` : '已清除表情');
+      }
+    }
+    closeEmojiDialog();
+  }
+
+  /* ----------------------------------------------------------------
      INIT EVENT LISTENERS
      ---------------------------------------------------------------- */
   function init(options = {}) {
@@ -267,7 +379,65 @@
       }, 120);
     });
 
-    // Escape key closes archive dialog
+    // Emoji picker dialog clicks
+    document.addEventListener('click', async (e) => {
+      const emojiDialog = document.getElementById('emojiPickerDialog');
+      if (emojiDialog && emojiDialog.style.display !== 'none' && e.target === emojiDialog) {
+        closeEmojiDialog();
+        return;
+      }
+
+      const actionEl = e.target.closest(
+        '[data-gtd-action="pick-emoji"], [data-gtd-action="close-emoji-dialog"], [data-gtd-action="select-quick-emoji"], [data-gtd-action="apply-custom-emoji"], [data-gtd-action="clear-emoji"]'
+      );
+      if (!actionEl) return;
+      const action = actionEl.dataset.gtdAction;
+
+      if (action === 'pick-emoji') {
+        const taskId = actionEl.dataset.taskId;
+        const stepId = actionEl.dataset.stepId || '';
+        if (taskId) {
+          await openEmojiDialog(taskId, stepId);
+        }
+        return;
+      }
+
+      if (action === 'close-emoji-dialog') {
+        closeEmojiDialog();
+        return;
+      }
+
+      if (action === 'select-quick-emoji') {
+        const emoji = actionEl.dataset.emoji || '';
+        await applyEmoji(emoji);
+        return;
+      }
+
+      if (action === 'apply-custom-emoji') {
+        const input = document.getElementById('emojiCustomInput');
+        const emoji = input ? input.value : '';
+        await applyEmoji(emoji);
+        return;
+      }
+
+      if (action === 'clear-emoji') {
+        await applyEmoji('');
+        return;
+      }
+    });
+
+    // Custom emoji input Enter key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const input = e.target.closest('#emojiCustomInput');
+        if (input) {
+          e.preventDefault();
+          applyEmoji(input.value);
+        }
+      }
+    });
+
+    // Escape key closes dialogs
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         const archiveDialog = document.getElementById('gtdArchiveDialog');
@@ -277,6 +447,10 @@
         const reuseDialog = document.getElementById('reuseDialog');
         if (reuseDialog && reuseDialog.style.display !== 'none') {
           closeReuseDialog();
+        }
+        const emojiDialog = document.getElementById('emojiPickerDialog');
+        if (emojiDialog && emojiDialog.style.display !== 'none') {
+          closeEmojiDialog();
         }
       }
     });
@@ -289,6 +463,9 @@
     refreshGtdArchiveList,
     openGtdArchiveDialog,
     closeGtdArchiveDialog,
+    openEmojiDialog,
+    closeEmojiDialog,
+    applyEmoji,
     init,
   };
 });

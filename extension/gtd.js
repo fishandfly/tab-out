@@ -2236,6 +2236,7 @@
         data-step-id="${step.id}"
         data-step-level="${step.level}"
         draggable="true"
+        title="${escapeHtml(step.text)}"
         style="${isStepVisible ? '' : 'display: none; '}--kanban-step-level:${step.level}"
       >
         ${hasStepChildren ? `
@@ -2270,7 +2271,7 @@
           data-step-id="${step.id}"
           ${step.completed ? 'checked' : ''}
         >
-        <span class="gtd-kanban-step-text">${escapeHtml(step.text)}</span>
+        <span class="gtd-kanban-step-text" title="${escapeHtml(step.text)}" data-full-text="${escapeHtml(step.text)}">${escapeHtml(step.text)}</span>
       </div>
     `;
   }
@@ -2343,6 +2344,7 @@
                           data-gtd-action="drag-kanban-item"
                           data-task-id="${task.id}"
                           draggable="true"
+                          title="${escapeHtml(task.title)}"
                         >
                           <input
                             class="gtd-task-checkbox"
@@ -2364,7 +2366,7 @@
                           title="所属任务：${escapeHtml(task.title)}（拖拽可移动任务及子步骤）"
                         >
                           <span class="gtd-kanban-anchor-label">所属任务:</span>
-                          <span class="gtd-kanban-anchor-text">${escapeHtml(task.title)}</span>
+                          <span class="gtd-kanban-anchor-text" title="${escapeHtml(task.title)}" data-full-text="${escapeHtml(task.title)}">${escapeHtml(task.title)}</span>
                           ${renderQuadrantRibbon(task.quadrant, titleConfig)}
                         </div>
                       `}

@@ -6024,6 +6024,12 @@ body::before {
     border-color: var(--accent-amber, #e2a46f);
   }
 
+  .gtd-emoji-quick-btn.is-selected {
+    background: rgba(226, 164, 111, 0.25);
+    border-color: var(--accent-amber, #e2a46f);
+    box-shadow: 0 0 0 1px var(--accent-amber, #e2a46f);
+  }
+
   .gtd-emoji-custom-row {
     display: flex;
     align-items: center;
@@ -6083,4 +6089,35 @@ body::before {
 
   footer {
     border-top-color: rgba(148, 163, 184, 0.16);
+  }
+
+  /* ---- GTD Kanban Truncated Text Hover Tip ---- */
+  .gtd-floating-tip {
+    position: fixed;
+    z-index: 100000;
+    pointer-events: none;
+    max-width: 380px;
+    padding: 6px 12px;
+    background: rgba(15, 23, 42, 0.96);
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 8px;
+    color: #f1f5f9;
+    font-size: 12px;
+    line-height: 1.45;
+    word-break: break-all;
+    white-space: normal;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    animation: gtdTipFadeIn 0.12s ease-out;
+  }
+
+  @keyframes gtdTipFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-2px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }

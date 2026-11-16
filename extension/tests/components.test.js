@@ -217,6 +217,9 @@ test('TabOutGTDDialogs: 导出函数存在性及渲染清单安全转义', () =>
   assert.equal(typeof TabOutGTDDialogs.closeReuseDialog, 'function');
   assert.equal(typeof TabOutGTDDialogs.openGtdArchiveDialog, 'function');
   assert.equal(typeof TabOutGTDDialogs.closeGtdArchiveDialog, 'function');
+  assert.equal(typeof TabOutGTDDialogs.openEmojiDialog, 'function');
+  assert.equal(typeof TabOutGTDDialogs.closeEmojiDialog, 'function');
+  assert.equal(typeof TabOutGTDDialogs.applyEmoji, 'function');
 
   // renderReuseList
   const mockContainer = { innerHTML: '' };

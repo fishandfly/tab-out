@@ -1590,6 +1590,28 @@ test('recoverTaskChecklistFromHistory 支持跨多天历史看板恢复，且不
   assert.equal(checklist[1].completedAt, pastCompletedAt);
 });
 
+test('Kanban 任务卡片与步骤卡片支持 tips 方式完整显示长名称', () => {
+  const longTaskTitle = '这是一个非常非常长的任务名称用来测试在看板泳道中显示不全时通过tips完整展示';
+  const longStepText = '这是一个非常详细且长的一级执行步骤，必须通过tips提示完整显示出来给用户查看';
+
+  let board = addTask(createEmptyBoard('2026-06-01'), 'importantUrgent', longTaskTitle);
+  const taskId = board.tasks[0].id;
+  board = addChecklistItem(board, taskId, longStepText);
+  board = updateTaskKanbanStatus(board, taskId, 'planned');
+
+  const kanbanHtml = renderKanbanBoard(board, {
+    expandedKanbanTasks: { [`planned:${taskId}`]: true },
+  });
+
+  // 1. 验证任务卡片包含 title 属性且完整保存了全文本
+  assert.match(kanbanHtml, new RegExp(`title="${longTaskTitle}"`));
+  assert.match(kanbanHtml, /class="gtd-kanban-task-card"[^>]*title="/);
+
+  // 2. 验证步骤卡片与步骤文字包含 title 属性且完整保存了全文本
+  assert.match(kanbanHtml, new RegExp(`title="${longStepText}"`));
+  assert.match(kanbanHtml, /class="gtd-kanban-step-text"[^>]*title="/);
+});
+
 
 
 

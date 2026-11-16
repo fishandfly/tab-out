@@ -2705,6 +2705,15 @@ function initGtdWorkspace() {
         }
         return;
       }
+
+      if (action === 'pick-emoji') {
+        const taskId = actionEl.dataset.taskId;
+        const stepId = actionEl.dataset.stepId || '';
+        if (window.TabOutGTDDialogs?.openEmojiDialog && taskId) {
+          window.TabOutGTDDialogs.openEmojiDialog(taskId, stepId);
+        }
+        return;
+      }
     } catch (err) {
       console.error('[tab-out] GTD click failed:', err);
       showToast('处理 GTD 操作失败');
@@ -3277,6 +3286,56 @@ document.addEventListener('dragstart', (e) => {
   }
 });
 
+// 当看板上的任务名称或步骤名称显示不全（被 ellipsis 截断）时，使用 tips 浮层完整展示
+function initKanbanOverflowTips() {
+  if (typeof document === 'undefined') return;
+  let tipEl = document.getElementById('gtdKanbanHoverTip');
+  if (!tipEl) {
+    tipEl = document.createElement('div');
+    tipEl.id = 'gtdKanbanHoverTip';
+    tipEl.className = 'gtd-floating-tip';
+    tipEl.style.display = 'none';
+    document.body.appendChild(tipEl);
+  }
+
+  let activeTarget = null;
+
+  document.addEventListener('mouseover', (e) => {
+    const textEl = e.target.closest('.gtd-kanban-task-title, .gtd-kanban-step-text, .gtd-kanban-anchor-text');
+    if (!textEl) return;
+
+    // 当且仅当文字截断显示不全时 (scrollWidth > clientWidth + 1)，展示 tips 浮层
+    if (textEl.scrollWidth > textEl.clientWidth + 1) {
+      activeTarget = textEl;
+      const fullText = textEl.getAttribute('data-full-text') || textEl.textContent.trim();
+      tipEl.textContent = fullText;
+      tipEl.style.display = 'block';
+
+      const rect = textEl.getBoundingClientRect();
+      const tipWidth = Math.min(380, Math.max(160, rect.width));
+      let top = rect.bottom + 6;
+      let left = rect.left;
+
+      if (left + tipWidth > window.innerWidth - 12) {
+        left = Math.max(12, window.innerWidth - tipWidth - 12);
+      }
+      if (top + 45 > window.innerHeight) {
+        top = Math.max(12, rect.top - 38);
+      }
+
+      tipEl.style.top = `${top}px`;
+      tipEl.style.left = `${left}px`;
+    }
+  });
+
+  document.addEventListener('mouseout', (e) => {
+    if (activeTarget && (e.target === activeTarget || activeTarget.contains(e.target))) {
+      tipEl.style.display = 'none';
+      activeTarget = null;
+    }
+  });
+}
+
 /* ----------------------------------------------------------------
    INITIALIZE
    ---------------------------------------------------------------- */
@@ -3285,6 +3344,7 @@ async function initializeDashboard() {
   loadUiPrefs();
   initAssetFallbacks();
   initGtdWorkspace();
+  initKanbanOverflowTips();
   initDynamicBackground();
   if (window.TabOutQuickLinks?.init) {
     window.TabOutQuickLinks.init({
