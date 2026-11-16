@@ -179,15 +179,29 @@ test('renderChecklistPanel 根据 batchStepTaskId 控制批量面板显隐', () 
 test('renderWorkspace 渲染面板分隔条并支持折叠与自定义宽度', () => {
   const board = addTask(createEmptyBoard('2026-04-28'), 'importantUrgent', '准备周报');
 
+  // 1. 默认状态：双向按钮（向左折叠四象限、向右折叠 checklist）
   const normal = renderWorkspace(board, {});
   assert.ok(normal.includes('gtd-panel-divider'));
   assert.ok(normal.includes('data-gtd-action="toggle-gtd-detail"'));
+  assert.ok(normal.includes('data-gtd-action="toggle-gtd-quadrants"'));
+  assert.ok(normal.includes('gtd-divider-toggle-left'));
+  assert.ok(normal.includes('gtd-divider-toggle-right'));
   assert.ok(!normal.includes('is-detail-collapsed'));
+  assert.ok(!normal.includes('is-quadrants-collapsed'));
 
+  // 2. 右侧 checklist 折叠
   const collapsed = renderWorkspace(board, { detailCollapsed: true });
   assert.ok(collapsed.includes('is-detail-collapsed'));
   assert.ok(collapsed.includes('gtd-panel-divider is-collapsed'));
+  assert.ok(collapsed.includes('data-gtd-action="toggle-gtd-detail"'));
 
+  // 3. 左侧四象限折叠（checklist 最大化）
+  const quadCollapsed = renderWorkspace(board, { quadrantsCollapsed: true });
+  assert.ok(quadCollapsed.includes('is-quadrants-collapsed'));
+  assert.ok(quadCollapsed.includes('gtd-panel-divider is-collapsed is-quadrants-collapsed'));
+  assert.ok(quadCollapsed.includes('data-gtd-action="toggle-gtd-quadrants"'));
+
+  // 4. 自定义宽度
   const resized = renderWorkspace(board, { detailWidth: 460 });
   assert.ok(resized.includes('--gtd-detail-width:460px'));
   assert.ok(resized.includes('has-custom-width'));

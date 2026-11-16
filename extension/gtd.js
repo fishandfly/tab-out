@@ -2242,41 +2242,93 @@
     `;
   }
 
-  // 渲染四象限与 checklist 之间的分隔条：中间按钮折叠/展开，其余区域可拖拽调宽
+  // 渲染四象限与 checklist 之间的分隔条：
+  // 正常状态显示双向按钮（向左折叠四象限、向右折叠 checklist 面板）；
+  // 单侧折叠时显示反向展开按钮；其余区域可拖拽调宽
   function renderGtdPanelDivider(options = {}) {
-    const collapsed = Boolean(options.detailCollapsed);
-    const label = collapsed ? '展开 checklist 面板' : '折叠 checklist 面板';
+    const detailCollapsed = Boolean(options.detailCollapsed);
+    const quadrantsCollapsed = Boolean(options.quadrantsCollapsed);
 
+    let dividerClass = 'gtd-panel-divider';
+    if (detailCollapsed) dividerClass += ' is-collapsed is-detail-collapsed';
+    if (quadrantsCollapsed) dividerClass += ' is-collapsed is-quadrants-collapsed';
+
+    if (detailCollapsed) {
+      const label = '展开 checklist 面板';
+      return `
+        <div class="${dividerClass}">
+          <button
+            class="gtd-divider-toggle gtd-divider-toggle-expand-detail"
+            type="button"
+            data-gtd-action="toggle-gtd-detail"
+            aria-label="${label}"
+            title="${label}"
+          >«</button>
+        </div>
+      `;
+    }
+
+    if (quadrantsCollapsed) {
+      const label = '展开四象限面板';
+      return `
+        <div class="${dividerClass}">
+          <button
+            class="gtd-divider-toggle gtd-divider-toggle-expand-quadrants"
+            type="button"
+            data-gtd-action="toggle-gtd-quadrants"
+            aria-label="${label}"
+            title="${label}"
+          >»</button>
+        </div>
+      `;
+    }
+
+    const leftLabel = '向左折叠四象限（最大化 checklist）';
+    const rightLabel = '向右折叠 checklist（最大化四象限）';
     return `
-      <div class="gtd-panel-divider${collapsed ? ' is-collapsed' : ''}">
-        <button
-          class="gtd-divider-toggle"
-          type="button"
-          data-gtd-action="toggle-gtd-detail"
-          aria-label="${label}"
-          title="${label}"
-        >${collapsed ? '«' : '»'}</button>
+      <div class="${dividerClass}">
+        <div class="gtd-divider-toggle-group">
+          <button
+            class="gtd-divider-toggle gtd-divider-toggle-left"
+            type="button"
+            data-gtd-action="toggle-gtd-quadrants"
+            aria-label="${leftLabel}"
+            title="${leftLabel}"
+          >«</button>
+          <button
+            class="gtd-divider-toggle gtd-divider-toggle-right"
+            type="button"
+            data-gtd-action="toggle-gtd-detail"
+            aria-label="${rightLabel}"
+            title="${rightLabel}"
+          >»</button>
+        </div>
       </div>
     `;
   }
 
-  // 渲染主行：四象限 + 分隔条 + checklist 面板，支持折叠与自定义宽度
+  // 渲染主行：四象限 + 分隔条 + checklist 面板，支持双向折叠与自定义宽度
   function renderGtdMainRow(board, quadrants, options = {}) {
-    const collapsed = Boolean(options.detailCollapsed);
+    const detailCollapsed = Boolean(options.detailCollapsed);
+    const quadrantsCollapsed = Boolean(options.quadrantsCollapsed);
     const width = Number(options.detailWidth);
-    const widthStyle = Number.isFinite(width) && width > 0
+    const widthStyle = Number.isFinite(width) && width > 0 && !quadrantsCollapsed
       ? ` style="--gtd-detail-width:${Math.round(width)}px"`
       : '';
 
+    let rowClass = 'gtd-main-row';
+    if (detailCollapsed) rowClass += ' is-detail-collapsed';
+    if (quadrantsCollapsed) rowClass += ' is-quadrants-collapsed';
+
     return `
-      <div class="gtd-main-row${collapsed ? ' is-detail-collapsed' : ''}">
+      <div class="${rowClass}">
         <section class="gtd-board-panel">
           <div class="gtd-quad-grid">
             ${quadrants.map((quadrant) => renderQuadrantCard(board, quadrant, options)).join('')}
           </div>
         </section>
         ${renderGtdPanelDivider(options)}
-        <section class="gtd-detail-panel${Number.isFinite(width) && width > 0 ? ' has-custom-width' : ''}"${widthStyle}>
+        <section class="gtd-detail-panel${Number.isFinite(width) && width > 0 && !quadrantsCollapsed ? ' has-custom-width' : ''}"${widthStyle}>
           ${renderChecklistPanel(board, options)}
         </section>
       </div>

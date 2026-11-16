@@ -1761,6 +1761,22 @@ body.gtd-divider-dragging .gtd-panel-divider::before {
   height: 110px;
 }
 
+.gtd-divider-toggle-group {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 2;
+}
+
+.gtd-divider-toggle-group .gtd-divider-toggle {
+  position: static;
+  transform: none;
+}
+
 .gtd-divider-toggle {
   position: absolute;
   top: 50%;
@@ -1778,13 +1794,19 @@ body.gtd-divider-dragging .gtd-panel-divider::before {
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 50%;
   cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
   z-index: 1;
 }
 
 .gtd-divider-toggle:hover {
   color: var(--accent-amber);
   border-color: var(--accent-amber);
+  background: rgba(26, 38, 57, 0.98);
+  transform: scale(1.1);
+}
+
+.gtd-divider-toggle-group .gtd-divider-toggle:hover {
+  transform: scale(1.1);
 }
 
 .gtd-panel-divider.is-collapsed {
@@ -1795,11 +1817,21 @@ body.gtd-divider-dragging .gtd-panel-divider::before {
   display: none;
 }
 
+.gtd-main-row.is-quadrants-collapsed .gtd-board-panel {
+  display: none;
+}
+
+.gtd-main-row.is-quadrants-collapsed .gtd-detail-panel {
+  flex: 1 1 0;
+  width: auto;
+  max-width: none;
+}
+
 /* 用户拖拽过后的 checklist 面板：固定宽度，其余空间留给四象限 */
 .gtd-detail-panel.has-custom-width {
   flex: 0 0 auto;
   width: var(--gtd-detail-width, 380px);
-  max-width: 62%;
+  max-width: 80%;
 }
 
 /* 拖拽过程中禁止选中文本，避免干扰 */

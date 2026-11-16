@@ -53,6 +53,7 @@ let uiPrefs = {
   activeGtdScope: 'day',
   activeMemoTag: '',
   gtdDetailCollapsed: false,
+  gtdQuadrantsCollapsed: false,
   gtdDetailWidth: 0,
   expandedCompletedQuadrants: {},
   expandedCompletedSteps: {},
@@ -153,6 +154,7 @@ function loadUiPrefs() {
       workspaceTab: 'gtd',
       activeGtdScope: validScopes[parsed.activeGtdScope] ? parsed.activeGtdScope : 'day',
       gtdDetailCollapsed: Boolean(parsed.gtdDetailCollapsed),
+      gtdQuadrantsCollapsed: Boolean(parsed.gtdQuadrantsCollapsed),
       gtdDetailWidth: normalizeGtdDetailWidth(parsed.gtdDetailWidth),
       expandedCompletedQuadrants: parsed.expandedCompletedQuadrants && typeof parsed.expandedCompletedQuadrants === 'object' ? parsed.expandedCompletedQuadrants : {},
       expandedCompletedSteps: parsed.expandedCompletedSteps && typeof parsed.expandedCompletedSteps === 'object' ? parsed.expandedCompletedSteps : {},
@@ -171,6 +173,7 @@ function saveUiPrefs() {
       gtdCollapsed: uiPrefs.gtdCollapsed,
       activeGtdScope: uiPrefs.activeGtdScope,
       gtdDetailCollapsed: uiPrefs.gtdDetailCollapsed,
+      gtdQuadrantsCollapsed: uiPrefs.gtdQuadrantsCollapsed,
       gtdDetailWidth: uiPrefs.gtdDetailWidth,
       expandedCompletedQuadrants: uiPrefs.expandedCompletedQuadrants || {},
       expandedCompletedSteps: uiPrefs.expandedCompletedSteps || {},
@@ -1558,8 +1561,8 @@ function syncWorkspaceTabbarMount(root) {
 function beginGtdDividerDrag(row, startClientX) {
   const rowRect = row.getBoundingClientRect();
   if (!rowRect.width) return;
-  // 拖拽上限同时受面板最小宽约束，保证四象限区域可用
-  const maxWidth = Math.max(GTD_DETAIL_MIN_WIDTH, Math.round(rowRect.width * 0.6));
+  // 拖拽上限同时受面板最小宽约束，保证四象限区域留有可用空间
+  const maxWidth = Math.max(GTD_DETAIL_MIN_WIDTH, Math.round(rowRect.width - 320));
 
   const clampWidth = (clientX) => Math.round(
     Math.min(Math.max(rowRect.right - clientX, GTD_DETAIL_MIN_WIDTH), maxWidth)
@@ -1622,6 +1625,7 @@ async function renderGtdWorkspace(options = {}) {
       pomodoro: getPomodoroState(),
       collapsed: uiPrefs.gtdCollapsed,
       detailCollapsed: uiPrefs.gtdDetailCollapsed,
+      quadrantsCollapsed: uiPrefs.gtdQuadrantsCollapsed,
       detailWidth: uiPrefs.gtdDetailWidth,
       expandedCompletedQuadrants: uiPrefs.expandedCompletedQuadrants || {},
       expandedCompletedSteps: uiPrefs.expandedCompletedSteps || {},
@@ -2488,6 +2492,19 @@ function initGtdWorkspace() {
       }
     }
 
+    const collapsedDivider = e.target.closest('.gtd-panel-divider.is-collapsed');
+    if (collapsedDivider && !e.target.closest('[data-gtd-action]')) {
+      if (uiPrefs.gtdDetailCollapsed) {
+        uiPrefs.gtdDetailCollapsed = false;
+      }
+      if (uiPrefs.gtdQuadrantsCollapsed) {
+        uiPrefs.gtdQuadrantsCollapsed = false;
+      }
+      saveUiPrefs();
+      await renderGtdWorkspace();
+      return;
+    }
+
     const actionEl = e.target.closest('[data-gtd-action]');
     if (!actionEl) return;
 
@@ -2617,7 +2634,24 @@ function initGtdWorkspace() {
       }
 
       if (action === 'toggle-gtd-detail') {
-        uiPrefs.gtdDetailCollapsed = !uiPrefs.gtdDetailCollapsed;
+        if (uiPrefs.gtdDetailCollapsed) {
+          uiPrefs.gtdDetailCollapsed = false;
+        } else {
+          uiPrefs.gtdDetailCollapsed = true;
+          uiPrefs.gtdQuadrantsCollapsed = false;
+        }
+        saveUiPrefs();
+        await renderGtdWorkspace();
+        return;
+      }
+
+      if (action === 'toggle-gtd-quadrants') {
+        if (uiPrefs.gtdQuadrantsCollapsed) {
+          uiPrefs.gtdQuadrantsCollapsed = false;
+        } else {
+          uiPrefs.gtdQuadrantsCollapsed = true;
+          uiPrefs.gtdDetailCollapsed = false;
+        }
         saveUiPrefs();
         await renderGtdWorkspace();
         return;
@@ -2862,7 +2896,7 @@ function initGtdWorkspace() {
   root.addEventListener('mousedown', (e) => {
     const divider = e.target.closest('.gtd-panel-divider');
     // 只响应分隔条空白区域的拖拽，折叠按钮仍走点击逻辑
-    if (!divider || e.target.closest('[data-gtd-action="toggle-gtd-detail"]')) return;
+    if (!divider || e.target.closest('[data-gtd-action="toggle-gtd-detail"], [data-gtd-action="toggle-gtd-quadrants"], .gtd-divider-toggle')) return;
     if (divider.classList.contains('is-collapsed')) return;
 
     const row = divider.closest('.gtd-main-row');
