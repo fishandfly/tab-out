@@ -2342,6 +2342,11 @@
     const visibleTasks = normalized.tasks.filter((task) => !task.archived);
     const quadrantConfig = options.quadrantConfig;
     const titleConfig = normalizeQuadrantConfig(quadrantConfig);
+    const quadrantOrder = quadrantConfig && quadrantConfig.order
+      ? normalizeQuadrantOrder(quadrantConfig.order)
+      : DEFAULT_QUADRANT_ORDER;
+    const quadrantRankMap = Object.fromEntries(quadrantOrder.map((q, idx) => [q, idx]));
+    const getQuadrantRank = (quadrant) => (quadrantRankMap[quadrant] ?? 999);
 
     return `
       <div class="gtd-kanban-board">
@@ -2349,22 +2354,32 @@
           let laneItemCount = 0;
           const groupHtmls = [];
 
-          let laneTasks = visibleTasks;
-          if (lane.key === 'done') {
-            laneTasks = [...visibleTasks].sort((a, b) => {
-              const timeA = Math.max(
-                a.status === 'done' ? getCompletedTimeValue(a) : 0,
-                ...a.checklist.filter((s) => s.status === 'done').map(getCompletedTimeValue),
-                0
-              );
-              const timeB = Math.max(
-                b.status === 'done' ? getCompletedTimeValue(b) : 0,
-                ...b.checklist.filter((s) => s.status === 'done').map(getCompletedTimeValue),
-                0
-              );
-              return timeB - timeA;
-            });
-          }
+          // 各个泳道中，按照任务分类（四象限顺序）进行排列
+          const laneTasks = visibleTasks
+            .map((task, originalIndex) => ({ task, originalIndex }))
+            .sort((aWrap, bWrap) => {
+              const a = aWrap.task;
+              const b = bWrap.task;
+              const quadDiff = getQuadrantRank(a.quadrant) - getQuadrantRank(b.quadrant);
+              if (quadDiff !== 0) return quadDiff;
+
+              if (lane.key === 'done') {
+                const timeA = Math.max(
+                  a.status === 'done' ? getCompletedTimeValue(a) : 0,
+                  ...a.checklist.filter((s) => s.status === 'done').map(getCompletedTimeValue),
+                  0
+                );
+                const timeB = Math.max(
+                  b.status === 'done' ? getCompletedTimeValue(b) : 0,
+                  ...b.checklist.filter((s) => s.status === 'done').map(getCompletedTimeValue),
+                  0
+                );
+                if (timeB !== timeA) return timeB - timeA;
+              }
+
+              return aWrap.originalIndex - bWrap.originalIndex;
+            })
+            .map((wrap) => wrap.task);
 
           for (const task of laneTasks) {
             const isTaskInLane = task.status === lane.key;

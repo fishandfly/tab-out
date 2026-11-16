@@ -1674,6 +1674,54 @@ test('preserveKanbanTaskExpandState 拖拽到新泳道时保持任务的展开�
   assert.match(doingSection, /aria-expanded="false"/);
 });
 
+test('renderKanbanBoard 各个泳道中严格按照任务分类（四象限顺序）进行排列', () => {
+  let board = createEmptyBoard('2026-11-16');
+  // 故意乱序添加不同分类的任务
+  board = addTask(board, 'urgentNotImportant', '产品化任务1');
+  board = addTask(board, 'importantUrgent', '重点项目任务1');
+  board = addTask(board, 'notImportantNotUrgent', '售前任务1');
+  board = addTask(board, 'importantNotUrgent', '合作探索任务1');
+  board = addTask(board, 'importantUrgent', '重点项目任务2');
+
+  // 将所有任务移至「今日计划」泳道
+  board.tasks.forEach((t) => {
+    board = updateTaskKanbanStatus(board, t.id, 'planned');
+  });
+
+  // 1. 默认四象限顺序：importantUrgent -> importantNotUrgent -> urgentNotImportant -> notImportantNotUrgent
+  const kanbanHtml = renderKanbanBoard(board);
+  const plannedSection = kanbanHtml.slice(
+    kanbanHtml.indexOf('data-gtd-drop-lane="planned"'),
+    kanbanHtml.indexOf('data-gtd-drop-lane="doing"')
+  );
+
+  const idxImpUrg1 = plannedSection.indexOf('重点项目任务1');
+  const idxImpUrg2 = plannedSection.indexOf('重点项目任务2');
+  const idxImpNotUrg = plannedSection.indexOf('合作探索任务1');
+  const idxUrgNotImp = plannedSection.indexOf('产品化任务1');
+  const idxNotImpNotUrg = plannedSection.indexOf('售前任务1');
+
+  assert.ok(idxImpUrg1 !== -1 && idxImpUrg2 !== -1 && idxImpNotUrg !== -1 && idxUrgNotImp !== -1 && idxNotImpNotUrg !== -1);
+  assert.ok(idxImpUrg1 < idxImpUrg2, '重点项目任务1 应在 重点项目任务2 之前（同象限保留原顺序）');
+  assert.ok(idxImpUrg2 < idxImpNotUrg, '重点项目任务 应在 合作探索任务 之前');
+  assert.ok(idxImpNotUrg < idxUrgNotImp, '合作探索任务 应在 产品化任务 之前');
+  assert.ok(idxUrgNotImp < idxNotImpNotUrg, '产品化任务 应在 售前任务 之前');
+
+  // 2. 自定义象限顺序测试：将 notImportantNotUrgent 排在首位
+  const customOrder = ['notImportantNotUrgent', 'importantUrgent', 'importantNotUrgent', 'urgentNotImportant'];
+  const customKanbanHtml = renderKanbanBoard(board, {
+    quadrantConfig: { order: customOrder },
+  });
+  const customPlannedSection = customKanbanHtml.slice(
+    customKanbanHtml.indexOf('data-gtd-drop-lane="planned"'),
+    customKanbanHtml.indexOf('data-gtd-drop-lane="doing"')
+  );
+  const customIdxNotImpNotUrg = customPlannedSection.indexOf('售前任务1');
+  const customIdxImpUrg1 = customPlannedSection.indexOf('重点项目任务1');
+  assert.ok(customIdxNotImpNotUrg < customIdxImpUrg1, '自定义排序下，排在前面的分类任务应优先排列在泳道上方');
+});
+
+
 
 
 
