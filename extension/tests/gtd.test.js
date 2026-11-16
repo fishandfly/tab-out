@@ -1429,7 +1429,7 @@ test('toggleTaskCompleted 与 toggleChecklistItemCompleted 会刷新 completedAt
   assert.ok(html.indexOf('任务1') < html.indexOf('任务2'));
 });
 
-test('Kanban 视图中任务已完成步骤折叠收起、按时间倒序排列，并支持展开/收起切换', () => {
+test('Kanban 视图中拖拽任务至「今日计划」仅流转未完成步骤，已完成步骤保留在「已完成」泳道并按倒序排列', () => {
   let board = addTask(createEmptyBoard('2026-11-16'), 'importantUrgent', '长春市一张图开发');
   const taskId = board.tasks[0].id;
   board = addChecklistItems(board, taskId, ['冬季房顶的雪去掉', 'onemap改进', '提升精模分辨率']);
@@ -1451,40 +1451,45 @@ test('Kanban 视图中任务已完成步骤折叠收起、按时间倒序排列�
   // 整体拖拽任务至「今日计划」
   board = updateTaskKanbanStatus(board, taskId, 'planned');
   assert.equal(board.tasks[0].status, 'planned');
-  // 保持 step1 和 step2 的完成状态，未完成的 step3 流转为 planned
+  // 保持 step1 和 step2 的完成状态（status 为 done），未完成的 step3 流转为 planned
   assert.equal(board.tasks[0].checklist.find((s) => s.id === step1Id).completed, true);
+  assert.equal(board.tasks[0].checklist.find((s) => s.id === step1Id).status, 'done');
   assert.equal(board.tasks[0].checklist.find((s) => s.id === step2Id).completed, true);
+  assert.equal(board.tasks[0].checklist.find((s) => s.id === step2Id).status, 'done');
   assert.equal(board.tasks[0].checklist.find((s) => s.id === step3Id).completed, false);
   assert.equal(board.tasks[0].checklist.find((s) => s.id === step3Id).status, 'planned');
 
-  // 1. 默认展开任务步骤容器时，已完成步骤默认处于折叠状态 (is-collapsed)
-  const defaultHtml = renderWorkspace(board, {
+  // 看板渲染：
+  // 1. 「今日计划」泳道内只展示当前泳道未完成步骤（提升精模分辨率），绝不包含已完成步骤
+  const kanbanHtml = renderWorkspace(board, {
     viewMode: 'kanban',
-    expandedKanbanTasks: { [`planned:${taskId}`]: true },
+    expandedKanbanTasks: { [`planned:${taskId}`]: true, [`done:${taskId}`]: true },
   });
-  // 未完成的活跃步骤显示在上方
-  assert.match(defaultHtml, /提升精模分辨率/);
-  // 已完成步骤在折叠区域中
-  assert.match(defaultHtml, /class="gtd-completed-section gtd-kanban-completed-section"/);
-  assert.match(defaultHtml, /data-gtd-action="toggle-kanban-completed-steps"/);
-  assert.match(defaultHtml, /已完成步骤 \(2\)/);
-  assert.match(defaultHtml, /class="gtd-completed-list gtd-kanban-completed-steps-list is-collapsed"/);
-  assert.match(defaultHtml, /style="display: none;"/);
 
-  // 2. 传入 expandedKanbanCompletedSteps 时，已完成步骤区域展开 (is-expanded)
-  const expandedHtml = renderWorkspace(board, {
-    viewMode: 'kanban',
-    expandedKanbanTasks: { [`planned:${taskId}`]: true },
-    expandedKanbanCompletedSteps: { [`planned:${taskId}`]: true },
-  });
-  assert.match(expandedHtml, /class="gtd-completed-list gtd-kanban-completed-steps-list is-expanded"/);
-  assert.match(expandedHtml, /已完成步骤 \(2\)/);
+  const plannedSection = kanbanHtml.slice(
+    kanbanHtml.indexOf('data-gtd-drop-lane="planned"'),
+    kanbanHtml.indexOf('data-gtd-drop-lane="doing"')
+  );
+  assert.match(plannedSection, /提升精模分辨率/);
+  assert.doesNotMatch(plannedSection, /冬季房顶的雪去掉/);
+  assert.doesNotMatch(plannedSection, /onemap改进/);
 
-  // 3. 验证已完成步骤按完成时间倒序排列：step2 (10:30) 位于 step1 (10:00) 之前
-  const idxStep2 = expandedHtml.indexOf('onemap改进');
-  const idxStep1 = expandedHtml.indexOf('冬季房顶的雪去掉');
+  // 2. 「已完成」泳道内展示所属任务及已完成步骤，且按时间倒序排列（step2 10:30 在 step1 10:00 之前）
+  const doneSection = kanbanHtml.slice(kanbanHtml.indexOf('data-gtd-drop-lane="done"'));
+  assert.match(doneSection, /所属任务:[\s\S]*长春市一张图开发/);
+  const idxStep2 = doneSection.indexOf('onemap改进');
+  const idxStep1 = doneSection.indexOf('冬季房顶的雪去掉');
   assert.ok(idxStep2 !== -1 && idxStep1 !== -1);
-  assert.ok(idxStep2 < idxStep1, '后完成的步骤 onemap改进 必须排在先完成的 冬季房顶的雪去掉 之前');
+  assert.ok(idxStep2 < idxStep1, '已完成泳道中后完成的步骤 onemap改进 必须排在先完成的 冬季房顶的雪去掉 之前');
+
+  // 3. 在四象限 Checklist 视图中，未完成步骤在上方，已完成步骤归入底部的已完成折叠区
+  const selectedBoard = selectTask(board, taskId);
+  const checklistHtml = renderWorkspace(selectedBoard, {
+    expandedCompletedSteps: { [taskId]: true },
+  });
+  assert.match(checklistHtml, /2\/3 步已完成/);
+  assert.match(checklistHtml, /class="gtd-completed-section gtd-step-completed-section"/);
+  assert.match(checklistHtml, /已完成步骤 \(2\)/);
 });
 
 

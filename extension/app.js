@@ -57,7 +57,6 @@ let uiPrefs = {
   expandedCompletedQuadrants: {},
   expandedCompletedSteps: {},
   expandedKanbanTasks: {},
-  expandedKanbanCompletedSteps: {},
   expandedChecklistSteps: {},
   gtdViewMode: 'quadrant',
 };
@@ -158,7 +157,6 @@ function loadUiPrefs() {
       expandedCompletedQuadrants: parsed.expandedCompletedQuadrants && typeof parsed.expandedCompletedQuadrants === 'object' ? parsed.expandedCompletedQuadrants : {},
       expandedCompletedSteps: parsed.expandedCompletedSteps && typeof parsed.expandedCompletedSteps === 'object' ? parsed.expandedCompletedSteps : {},
       expandedKanbanTasks: parsed.expandedKanbanTasks && typeof parsed.expandedKanbanTasks === 'object' ? parsed.expandedKanbanTasks : {},
-      expandedKanbanCompletedSteps: parsed.expandedKanbanCompletedSteps && typeof parsed.expandedKanbanCompletedSteps === 'object' ? parsed.expandedKanbanCompletedSteps : {},
       expandedChecklistSteps: parsed.expandedChecklistSteps && typeof parsed.expandedChecklistSteps === 'object' ? parsed.expandedChecklistSteps : {},
       gtdViewMode: parsed.gtdViewMode === 'kanban' ? 'kanban' : 'quadrant',
     };
@@ -177,7 +175,6 @@ function saveUiPrefs() {
       expandedCompletedQuadrants: uiPrefs.expandedCompletedQuadrants || {},
       expandedCompletedSteps: uiPrefs.expandedCompletedSteps || {},
       expandedKanbanTasks: uiPrefs.expandedKanbanTasks || {},
-      expandedKanbanCompletedSteps: uiPrefs.expandedKanbanCompletedSteps || {},
       expandedChecklistSteps: uiPrefs.expandedChecklistSteps || {},
       gtdViewMode: uiPrefs.gtdViewMode || 'quadrant',
     }));
@@ -1629,7 +1626,6 @@ async function renderGtdWorkspace(options = {}) {
       expandedCompletedQuadrants: uiPrefs.expandedCompletedQuadrants || {},
       expandedCompletedSteps: uiPrefs.expandedCompletedSteps || {},
       expandedKanbanTasks: uiPrefs.expandedKanbanTasks || {},
-      expandedKanbanCompletedSteps: uiPrefs.expandedKanbanCompletedSteps || {},
       expandedChecklistSteps: uiPrefs.expandedChecklistSteps || {},
       viewMode: uiPrefs.gtdViewMode || 'quadrant',
       activeTab: uiPrefs.workspaceTab,
@@ -2486,18 +2482,6 @@ function initGtdWorkspace() {
         const key = lane ? `${lane}:${taskId}` : taskId;
         uiPrefs.expandedKanbanTasks = uiPrefs.expandedKanbanTasks || {};
         uiPrefs.expandedKanbanTasks[key] = !uiPrefs.expandedKanbanTasks[key];
-        saveUiPrefs();
-        await renderGtdWorkspace();
-        return;
-      }
-
-      if (action === 'toggle-kanban-completed-steps') {
-        const taskId = actionEl.dataset.taskId;
-        const lane = actionEl.dataset.lane || '';
-        if (!taskId) return;
-        const key = lane ? `${lane}:${taskId}` : taskId;
-        uiPrefs.expandedKanbanCompletedSteps = uiPrefs.expandedKanbanCompletedSteps || {};
-        uiPrefs.expandedKanbanCompletedSteps[key] = !uiPrefs.expandedKanbanCompletedSteps[key];
         saveUiPrefs();
         await renderGtdWorkspace();
         return;

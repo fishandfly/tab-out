@@ -2080,33 +2080,25 @@
 
           for (const task of laneTasks) {
             const isTaskInLane = task.status === lane.key;
-            let activeSteps = [];
-            let completedSteps = [];
+            let laneSteps = [];
 
             if (lane.key === 'done') {
-              completedSteps = sortCompletedDesc(task.checklist.filter((item) => item.status === 'done' || item.completed));
+              laneSteps = sortCompletedDesc(task.checklist.filter((item) => item.status === 'done' || item.completed));
             } else {
-              activeSteps = task.checklist.filter((item) => !item.completed && item.status === lane.key);
-              if (isTaskInLane) {
-                completedSteps = sortCompletedDesc(task.checklist.filter((item) => item.completed || item.status === 'done'));
-              }
+              laneSteps = task.checklist.filter((item) => !item.completed && item.status === lane.key);
             }
 
-            const laneStepsCount = activeSteps.length + (lane.key === 'done' ? completedSteps.length : 0);
             if (isTaskInLane) laneItemCount += 1;
-            laneItemCount += laneStepsCount;
+            laneItemCount += laneSteps.length;
 
-            const hasAnySteps = activeSteps.length > 0 || completedSteps.length > 0;
-
-            if (isTaskInLane || hasAnySteps) {
+            if (isTaskInLane || laneSteps.length > 0) {
               const quadTitle = titleConfig[task.quadrant] || DEFAULT_QUADRANT_TITLES[task.quadrant] || '任务';
               const taskKey = `${lane.key}:${task.id}`;
               const isTaskExpanded = Boolean(options.expandedKanbanTasks?.[taskKey] || options.expandedKanbanTasks?.[task.id]);
-              const isCompletedExpanded = Boolean(options.expandedKanbanCompletedSteps?.[taskKey] || options.expandedKanbanCompletedSteps?.[task.id]);
 
-              const activeStepMeta = computeStepTreeVisibility(activeSteps, options.expandedChecklistSteps, options);
-              const completedStepMeta = completedSteps.map(() => ({ isVisible: true, hasChildren: false, isExpanded: false }));
-              const totalDisplayStepsCount = activeSteps.length + completedSteps.length;
+              const laneStepMeta = lane.key === 'done'
+                ? laneSteps.map(() => ({ isVisible: true, hasChildren: false, isExpanded: false }))
+                : computeStepTreeVisibility(laneSteps, options.expandedChecklistSteps, options);
 
               groupHtmls.push(`
                 <div class="gtd-kanban-group" data-task-id="${task.id}">
@@ -2150,7 +2142,7 @@
                           ${renderQuadrantRibbon(task.quadrant, titleConfig)}
                         </div>
                       `}
-                      ${totalDisplayStepsCount > 0 ? `
+                      ${laneSteps.length > 0 ? `
                         <button
                           class="gtd-kanban-toggle-btn"
                           type="button"
@@ -2158,39 +2150,17 @@
                           data-task-id="${task.id}"
                           data-lane="${lane.key}"
                           aria-expanded="${isTaskExpanded ? 'true' : 'false'}"
-                          title="${isTaskExpanded ? '收起步骤' : `展开步骤 (${totalDisplayStepsCount})`}"
+                          title="${isTaskExpanded ? '收起步骤' : `展开步骤 (${laneSteps.length})`}"
                         >
                           <span class="gtd-kanban-toggle-icon">${isTaskExpanded ? '▾' : '▸'}</span>
-                          <span class="gtd-kanban-toggle-count">${totalDisplayStepsCount}</span>
+                          <span class="gtd-kanban-toggle-count">${laneSteps.length}</span>
                         </button>
                       ` : ''}
                     </div>
                   </div>
-                  ${totalDisplayStepsCount > 0 ? `
+                  ${laneSteps.length > 0 ? `
                     <div class="gtd-kanban-group-steps${isTaskExpanded ? ' is-expanded' : ' is-collapsed'}"${isTaskExpanded ? '' : ' style="display: none;"'}>
-                      ${activeSteps.map((step, sIdx) => renderKanbanStepCard(task, step, activeStepMeta[sIdx])).join('')}
-                      ${completedSteps.length > 0 ? `
-                        <div class="gtd-completed-section gtd-kanban-completed-section" data-completed-task="${task.id}" data-lane="${lane.key}">
-                          <button
-                            class="gtd-completed-toggle gtd-kanban-completed-toggle"
-                            type="button"
-                            data-gtd-action="toggle-kanban-completed-steps"
-                            data-task-id="${task.id}"
-                            data-lane="${lane.key}"
-                            aria-expanded="${isCompletedExpanded ? 'true' : 'false'}"
-                            title="${isCompletedExpanded ? '收起已完成步骤' : '展开已完成步骤'}"
-                          >
-                            <span class="gtd-completed-toggle-title">
-                              <span class="gtd-completed-toggle-icon">${isCompletedExpanded ? '▾' : '▸'}</span>
-                              已完成步骤 (${completedSteps.length})
-                            </span>
-                            <span class="gtd-completed-toggle-hint">${isCompletedExpanded ? '收起' : '展开'}</span>
-                          </button>
-                          <div class="gtd-completed-list gtd-kanban-completed-steps-list${isCompletedExpanded ? ' is-expanded' : ' is-collapsed'}"${isCompletedExpanded ? '' : ' style="display: none;"'}>
-                            ${completedSteps.map((step, sIdx) => renderKanbanStepCard(task, step, completedStepMeta[sIdx])).join('')}
-                          </div>
-                        </div>
-                      ` : ''}
+                      ${laneSteps.map((step, sIdx) => renderKanbanStepCard(task, step, laneStepMeta[sIdx])).join('')}
                     </div>
                   ` : ''}
                 </div>
