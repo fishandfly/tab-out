@@ -27,8 +27,11 @@
        ================================================================ -->
   <header>
     <div class="header-left">
-      <!-- "Good afternoon" — written by getGreeting() in app.js -->
-      <h1 id="greeting"></h1>
+      <div class="header-title-row">
+        <!-- "Good afternoon" — written by getGreeting() in app.js -->
+        <h1 id="greeting"></h1>
+        <div class="codex-reset-widget" id="codexResetWidget" aria-label="Codex 重置预测"></div>
+      </div>
       <!-- "Friday, April 4, 2026" — written by getDateDisplay() in app.js -->
       <div class="date" id="dateDisplay"></div>
     </div>
@@ -143,6 +146,8 @@
   <button class="background-credit-link" id="backgroundSwitchBtn" type="button">换图</button>
 </div>
 
+<div class="ai-assistant-root" id="aiAssistantRoot"></div>
+
 <!-- ================================================================
      TOAST — floats above everything, used for action confirmations
      Hidden by default via CSS (opacity:0, translateY)
@@ -176,6 +181,61 @@
   </div>
 </div>
 
+<!-- ================================================================
+     GTD ARCHIVE RETRIEVAL DIALOG — appears when user clicks "检索归档"
+     Hidden by default; shown by app.js
+     ================================================================ -->
+<div class="dialog-overlay" id="gtdArchiveDialog" style="display:none">
+  <div class="dialog-box gtd-archive-dialog-box">
+    <div class="dialog-header">
+      <div class="gtd-archive-header-title">
+        <h3>检索 GTD 归档</h3>
+        <span class="gtd-archive-badge" id="gtdArchiveCountBadge">0</span>
+      </div>
+      <button class="dialog-close-btn" type="button" data-gtd-action="close-archive-dialog" aria-label="关闭">×</button>
+    </div>
+    <div class="gtd-archive-search-container">
+      <input
+        type="text"
+        class="dialog-search gtd-archive-search-input"
+        id="gtdArchiveSearch"
+        placeholder="搜索归档任务标题或步骤内容..."
+        autocomplete="off"
+      >
+    </div>
+    <div class="dialog-list gtd-archive-list" id="gtdArchiveList"></div>
+  </div>
+</div>
+
+<!-- ================================================================
+     GTD EMOJI PICKER DIALOG — select emoji for task/subtask
+     Hidden by default; shown by app.js
+     ================================================================ -->
+<div class="dialog-overlay gtd-emoji-overlay" id="emojiPickerDialog" style="display:none">
+  <div class="dialog-box gtd-emoji-dialog-box">
+    <div class="dialog-header">
+      <div class="gtd-emoji-dialog-title">
+        <h3>选择表情图标</h3>
+        <span class="gtd-emoji-target-label" id="emojiPickerTargetLabel"></span>
+      </div>
+      <button class="dialog-close-btn" type="button" data-gtd-action="close-emoji-dialog" aria-label="关闭">×</button>
+    </div>
+    <div class="gtd-emoji-quick-grid" id="emojiPickerGrid"></div>
+    <div class="gtd-emoji-custom-row">
+      <input
+        type="text"
+        class="dialog-search gtd-emoji-custom-input"
+        id="emojiCustomInput"
+        placeholder="输入或粘贴自定义表情..."
+        maxlength="16"
+        autocomplete="off"
+      >
+      <button class="gtd-emoji-custom-apply" type="button" data-gtd-action="apply-custom-emoji">确定</button>
+      <button class="gtd-emoji-clear-btn" type="button" data-gtd-action="clear-emoji">清除</button>
+    </div>
+  </div>
+</div>
+
 <!-- JSZip for backup ZIP creation -->
 <script src="jszip.min.js"></script>
 
@@ -187,6 +247,27 @@
 
 <!-- Micro notes (flomo-style) -->
 <script src="memo.js"></script>
+
+<!-- AI assistant -->
+<script src="ai.js"></script>
+
+<!-- Codex Reset prediction widget -->
+<script src="codex-reset.js"></script>
+
+<!-- Component: Quick Links (常用链接) -->
+<script src="quick-links.js"></script>
+
+<!-- Component: Pomodoro Timer (番茄钟) -->
+<script src="pomodoro.js"></script>
+
+<!-- Component: Deferred Tabs (待办/稍后阅读) -->
+<script src="deferred-tabs.js"></script>
+
+<!-- Component: Dynamic Background Manager (动态壁纸) -->
+<script src="background-manager.js"></script>
+
+<!-- Component: GTD Dialogs (复用/检索归档弹窗) -->
+<script src="gtd-dialogs.js"></script>
 
 <!-- Main dashboard logic — loads last so the DOM is ready -->
 <script src="app.js"></script>

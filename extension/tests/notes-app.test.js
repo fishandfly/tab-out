@@ -53,8 +53,8 @@ test('笔记页面源码包含工具栏、Tiptap 编辑器与状态脚本接入'
   assert.match(appJsx, /TaskList/);
   assert.match(appJsx, /TaskItem/);
   assert.match(appJsx, /全屏/);
-  assert.match(appJsx, /导入 \.md/);
-  assert.match(appJsx, /导出 \.md/);
+  assert.match(appJsx, /导入/);
+  assert.match(appJsx, /导出/);
   assert.match(appJsx, /FALLBACK_TITLE\s*=\s*'笔记'/);
   assert.match(appJsx, /onDoubleClick=/);
   assert.match(appJsx, /notes-title-input/);

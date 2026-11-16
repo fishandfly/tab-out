@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>生态环境数据运营与安全管控解决方案架构图 (超高清矢量版)</title>
+  <style>
+    :root {
+      --deep-blue: #0f172a;
+      --navy-blue: #1e3a8a;
+      --tech-blue: #2563eb;
+      --soft-blue: #eff6ff;
+      --cyan-green: #0d9488;
+      --bright-green: #10b981;
+      --light-green: #ecfdf5;
+      --charcoal-black: #1e293b;
+      --text-muted: #64748b;
+      --border-light: rgba(226, 232, 240, 0.8);
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-family);
+      background-color: #f8fafc;
+      color: var(--charcoal-black);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+      overflow-x: hidden;
+    }
+
+    /* 极光霓虹漫反射背景 */
+    .bg-glow-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: -1;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .glow-sphere-1 {
+      position: absolute;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(37, 99, 235, 0.08) 0%, rgba(255, 255, 255, 0) 70%);
+      top: -100px;
+      left: -100px;
+      filter: blur(80px);
+    }
+
+    .glow-sphere-2 {
+      position: absolute;
+      width: 700px;
+      height: 700px;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.07) 0%, rgba(255, 255, 255, 0) 70%);
+      bottom: -150px;
+      right: -100px;
+      filter: blur(100px);
+    }
+
+    .glow-sphere-3 {
+      position: absolute;
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(13, 148, 136, 0.06) 0%, rgba(255, 255, 255, 0) 70%);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      filter: blur(90px);
+    }
+
+    /* 顶层说明与操作区 */
+    .controls {
+      margin-bottom: 20px;
+      text-align: center;
+      z-index: 10;
+    }
+
+    .controls h1 {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--charcoal-black);
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+
+    .controls p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* 严格 16:9 黄金比架构容器 */
+    .canvas-container {
+      width: 1360px;
+      height: 765px; /* 严格 16:9 宽高比 */
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      border-radius: 28px;
+      box-shadow: 0 25px 60px rgba(15, 23, 42, 0.05), 
+                  0 0 1px rgba(15, 23, 42, 0.1) inset;
+      padding: 30px 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* 页面大标题 */
+    .chart-header {
+      text-align: center;
+      margin-bottom: 15px;
+      position: relative;
+      z-index: 5;
+    }
+
+    .chart-header h2 {
+      font-size: 26px;
+      font-weight: 850;
+      color: var(--charcoal-black);
+      letter-spacing: 1px;
+    }
+
+    .chart-header p {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--cyan-green);
+      margin-top: 4px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    /* 主架构区域 */
+    .architecture-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: relative;
+      min-height: 0;
+    }
+
+    /* 每一层布局 */
+    .row-layer {
+      display: flex;
+      align-items: stretch;
+      gap: 20px;
+      position: relative;
+      z-index: 2;
+    }
+
+    /* 左侧层级药丸徽章 */
+    .layer-badge-zone {
+      width: 140px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      padding-left: 10px;
+    }
+
+    .layer-pill {
+      padding: 8px 14px;
+      border-radius: 12px;
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.03);
+      width: 100%;
+      text-align: center;
+      transition: all 0.3s;
+    }
+
+    /* 深蓝和亮绿交替配色 */
+    .layer-pill.blue-theme {
+      background: linear-gradient(135deg, var(--navy-blue) 0%, #1e40af 100%);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .layer-pill.green-theme {
+      background: linear-gradient(135deg, var(--cyan-green) 0%, var(--bright-green) 100%);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .layer-title-sub {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-top: 5px;
+      padding-left: 4px;
+    }
+
+    /* 中间卡片槽 */
+    .layer-cards-wrapper {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.5);
+      border: 1px solid rgba(226, 232, 240, 0.7);
+      border-radius: 18px;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.01);
+    }
+
+    .row-layer.l1 .layer-cards-wrapper { border-color: rgba(37, 99, 235, 0.15); background: rgba(37, 99, 235, 0.01); }
+    .row-layer.l2 .layer-cards-wrapper { border-color: rgba(37, 99, 235, 0.15); background: rgba(37, 99, 235, 0.01); }
+    .row-layer.l3 .layer-cards-wrapper { border-color: rgba(13, 148, 136, 0.15); background: rgba(13, 148, 136, 0.01); }
+    .row-layer.l4 .layer-cards-wrapper { border-color: rgba(37, 99, 235, 0.15); background: rgba(37, 99, 235, 0.01); }
+    .row-layer.l5 .layer-cards-wrapper { border-color: rgba(13, 148, 136, 0.15); background: rgba(13, 148, 136, 0.01); }
+
+    /* 高品质功能卡片 */
+    .item-card {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      border-radius: 12px;
+      padding: 10px 14px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.02), 
+                  0 1px 2px rgba(15, 23, 42, 0.01);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      min-height: 58px;
+    }
+
+    .item-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+      border-color: var(--tech-blue);
+    }
+
+    .item-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--charcoal-black);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .item-title svg {
+      flex-shrink: 0;
+    }
+
+    .l1 .item-title svg { color: var(--tech-blue); }
+    .l2 .item-title svg { color: var(--tech-blue); }
+    .l3 .item-title svg { color: var(--cyan-green); }
+    .l4 .item-title svg { color: var(--tech-blue); }
+    .l5 .item-title svg { color: var(--cyan-green); }
+
+    .item-desc {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 3px;
+      line-height: 1.3;
+    }
+
+    /* 数据源卡片微调 */
+    .l5 .item-card {
+      flex: 1;
+    }
+
+    /* 连线与闭环环形组件 (SVG 完美矢量绘制) */
+    .svg-flow-lines {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* 中部闭环互扣圆环流程结构 */
+    .loop-flow-container {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 320px;
+      height: 110px;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+    }
+
+    .loop-ring-group {
+      display: flex;
+      gap: -20px; /* 互扣视觉 */
+      position: relative;
+    }
+
+    .loop-ring {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.95);
+      border: 3px solid var(--tech-blue);
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      position: relative;
+      transition: all 0.3s;
+    }
+
+    .loop-ring:nth-child(2) {
+      border-color: var(--cyan-green);
+      margin-left: -15px;
+      box-shadow: 0 8px 20px rgba(13, 148, 136, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+    }
+
+    .loop-ring:nth-child(3) {
+      border-color: var(--bright-green);
+      margin-left: -15px;
+      box-shadow: 0 8px 20px rgba(16, 185, 129, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+    }
+
+    .loop-ring:hover {
+      transform: scale(1.06);
+      z-index: 10;
+    }
+
+    .loop-ring .title {
+      font-size: 12px;
+      font-weight: 850;
+      color: var(--charcoal-black);
+    }
+
+    .loop-ring .desc {
+      font-size: 8px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      transform: scale(0.9);
+    }
+
+    .loop-arrow-svg {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    /* 右侧横切“安全管控跨切系统”侧栏 */
+    .right-sidebar-panel {
+      width: 70px;
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.15) 0%, rgba(13, 148, 136, 0.15) 100%);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 8px;
+      position: absolute;
+      right: 0;
+      top: 136px; /* 贯穿 L3 与 L4 */
+      height: 310px;
+      z-index: 10;
+      box-shadow: 0 10px 30px rgba(16, 185, 129, 0.05),
+                  0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+      backdrop-filter: blur(10px);
+    }
+
+    .sidebar-icon {
+      color: var(--cyan-green);
+      margin-bottom: 12px;
+      background: #ffffff;
+      padding: 6px;
+      border-radius: 50%;
+      box-shadow: 0 4px 8px rgba(13, 148, 136, 0.1);
+    }
+
+    .sidebar-text {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      font-size: 13px;
+      font-weight: 850;
+      color: var(--charcoal-black);
+      letter-spacing: 4px;
+      text-align: center;
+    }
+
+    .sidebar-desc {
+      font-size: 8px;
+      color: var(--cyan-green);
+      margin-top: 10px;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      letter-spacing: 1px;
+      transform: scale(0.95);
+    }
+
+    /* 底部四大核心价值栏 */
+    .chart-footer {
+      border-top: 1px dashed var(--border-light);
+      padding-top: 20px;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      position: relative;
+      z-index: 5;
+    }
+
+    .value-pill {
+      flex: 1;
+      background: #ffffff;
+      border: 1px solid rgba(37, 99, 235, 0.15);
+      border-radius: 999px;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.02);
+      transition: all 0.3s;
+    }
+
+    .value-pill:hover {
+      border-color: var(--cyan-green);
+      box-shadow: 0 8px 20px rgba(13, 148, 136, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .value-pill:nth-child(even) {
+      border-color: rgba(13, 148, 136, 0.15);
+    }
+
+    .value-icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .value-pill:nth-child(odd) .value-icon { background: rgba(37, 99, 235, 0.08); color: var(--tech-blue); }
+    .value-pill:nth-child(even) .value-icon { background: rgba(13, 148, 136, 0.08); color: var(--cyan-green); }
+
+    .value-title {
+      font-size: 13px;
+      font-weight: 850;
+      color: var(--charcoal-black);
+    }
+
+    .value-desc {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* 网页截图提示 */
+    .print-tip {
+      margin-top: 15px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* 中部闭环卡住两边，对 L3 卡片槽的宽度限制以容纳环 */
+    .l3 .layer-cards-wrapper {
+      justify-content: space-between;
+    }
+    
+    .l3-left-cards, .l3-right-cards {
+      display: flex;
+      gap: 14px;
+      width: calc(50% - 160px);
+    }
+
+    /* 数据流指示线 */
+    .svg-flow-lines line, .svg-flow-lines path {
+      stroke-linecap: round;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 漫反射发光斑 -->
+  <div class="bg-glow-container">
+    <div class="glow-sphere-1"></div>
+    <div class="glow-sphere-2"></div>
+    <div class="glow-sphere-3"></div>
+  </div>
+
+  <div class="controls">
+    <h1>生态环境数据运营与安全管控解决方案架构图</h1>
+    <p>💡 提示：本页面为矢量超高清 HTML 网页版。您可以通过浏览器全屏查看，使用缩放不损失精度，配合截图工具可获取视网膜级别的超清截图。</p>
+  </div>
+
+  <!-- 16:9 画布 -->
+  <div class="canvas-container" id="architectureCanvas">
+
+    <!-- 矢量拓扑数据流 & 反馈流指示线 -->
+    <svg class="svg-flow-lines" viewBox="0 0 1360 765" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- 左右主流程框与外部连接线 -->
+      <!-- 治理层 L4 流向能力层 L3 -->
+      <path d="M 680 500 L 680 435" stroke="#2563eb" stroke-width="2.5" stroke-dasharray="4,4" />
+      <path d="M 680 435 L 680 395" stroke="#10b981" stroke-width="2.5" />
+      <!-- L5 基础设施流向 L4 治理层 -->
+      <path d="M 680 620 L 680 560" stroke="#2563eb" stroke-width="2.5" />
+      <!-- 右侧安全管控流横向切入 (L3, L4) -->
+      <path d="M 1210 290 L 1180 290" stroke="#10b981" stroke-width="2" stroke-dasharray="4,4" />
+      <path d="M 1210 460 L 1150 460" stroke="#10b981" stroke-width="2" stroke-dasharray="4,4" />
+      <!-- 数据血缘 L3 到 L2 贯通线 -->
+      <path d="M 980 350 L 1020 350 L 1020 230" stroke="#2563eb" stroke-width="2" />
+      <polygon points="1020,225 1016,233 1024,233" fill="#2563eb" />
+      <!-- 反馈回路：应用层 L2 流回 治理层 L4 -->
+      <path d="M 190 230 L 150 230 L 150 495 L 190 495" stroke="#10b981" stroke-width="2" stroke-dasharray="5,5" />
+      <polygon points="195,495 187,491 187,499" fill="#10b981" />
+    </svg>
+
+    <!-- 头部标题区 -->
+    <div class="chart-header">
+      <h2>生态环境数据运营与安全管控解决方案架构图</h2>
+      <p>Consulting + Systemization + Operations · One-Stop Closed Loop Solution</p>
+    </div>
+
+    <!-- 主架构区域 -->
+    <div class="architecture-body">
+
+      <!-- L1 展示层 -->
+      <div class="row-layer l1">
+        <div class="layer-badge-zone">
+          <div class="layer-pill blue-theme">展示层 (L1)</div>
+          <div class="layer-title-sub">服务与展示层</div>
+        </div>
+        <div class="layer-cards-wrapper">
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+              数据资源门户
+            </div>
+            <div class="item-desc">核心动作：数据预览、目录查询，实现数据“看得清”的前哨门户。</div>
+          </div>
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
+              运营管理后台
+            </div>
+            <div class="item-desc">承载资源运营审计与服务统计，驱动数据持续迭代。</div>
+          </div>
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              安全管控台
+            </div>
+            <div class="item-desc">策略下发与实时审批，安全管理人员的统一操控面板。</div>
+          </div>
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              供需对接门户
+            </div>
+            <div class="item-desc">核心动作：个人收藏、对接申请，业务方数据“用得起来”的桥梁。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- L2 应用层 -->
+      <div class="row-layer l2">
+        <div class="layer-badge-zone">
+          <div class="layer-pill blue-theme">应用层 (L2)</div>
+          <div class="layer-title-sub">业务应用层</div>
+        </div>
+        <div class="layer-cards-wrapper">
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+              场景应用域
+            </div>
+            <div class="item-desc">包含：环评助手、环境执法、固废管理等核心环保业务子系统。</div>
+          </div>
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+              知识文档库
+            </div>
+            <div class="item-desc">固化各类环境标准、政策法规与知识图谱的共享中心。</div>
+          </div>
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+              运行统计看板
+            </div>
+            <div class="item-desc">对环境指标与数据交换频次进行实时可视化分析。</div>
+          </div>
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              数据血缘可视化
+            </div>
+            <div class="item-desc">全图渲染，展示数据在治理与应用流转过程中的生命历程。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- L3 能力层 -->
+      <div class="row-layer l3">
+        <div class="layer-badge-zone">
+          <div class="layer-pill green-theme">能力层 (L3)</div>
+          <div class="layer-title-sub">核心能力层 (技术中枢)</div>
+        </div>
+        <div class="layer-cards-wrapper">
+          <!-- 左侧：目录服务 -->
+          <div class="l3-left-cards">
+            <div class="item-card">
+              <div class="item-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                数据资源目录服务
+              </div>
+              <div class="item-desc">整合文档资源、空间矢量地理资源，提供统一高弹性的数据 API 输出服务。</div>
+            </div>
+          </div>
+
+          <!-- 中间相扣圆环 -->
+          <div class="loop-flow-container">
+            <div class="loop-ring-group">
+              <div class="loop-ring">
+                <span class="title">咨询梳理</span>
+                <span class="desc">定义标准与分级</span>
+              </div>
+              <div class="loop-ring">
+                <span class="title">系统固化</span>
+                <span class="desc">转化为平台能力</span>
+              </div>
+              <div class="loop-ring">
+                <span class="title">运营迭代</span>
+                <span class="desc">应用反馈驱动更新</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右侧：运营支撑 -->
+          <div class="l3-right-cards">
+            <div class="item-card">
+              <div class="item-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                运营支撑与对接能力
+              </div>
+              <div class="item-desc">承担供需对接协议响应，管理数据授权资源，提供最新数据实时预览。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- L4 治理层 -->
+      <div class="row-layer l4">
+        <div class="layer-badge-zone">
+          <div class="layer-pill blue-theme">治理层 (L4)</div>
+          <div class="layer-title-sub">数据治理层 (标准落地)</div>
+        </div>
+        <div class="layer-cards-wrapper">
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+              数据标准管理
+            </div>
+            <div class="item-desc">定义核心字段标准与校验库，实现基础规范统一。</div>
+          </div>
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              元数据管理
+            </div>
+            <div class="item-desc">自动解析环境业务元数据，精准映射各层逻辑。</div>
+          </div>
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 11.08 22 12 12 22 2 12 12 2 22 11.08"></polyline><polyline points="22 4 12 14 2 4"></polyline></svg>
+              数据质量管控
+            </div>
+            <div class="item-desc">实时监控环境数据质量，自动拦截缺失或异常数据。</div>
+          </div>
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+              数据分类分级
+            </div>
+            <div class="item-desc">实现关键核心数据分类分级（达到“分得准”的核心价值）。</div>
+          </div>
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+              共享规则引擎
+            </div>
+            <div class="item-desc">规范化共享审批规则，驱动跨部门、跨层级业务流转。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- L5 基座层 -->
+      <div class="row-layer l5">
+        <div class="layer-badge-zone">
+          <div class="layer-pill green-theme">基座层 (L5)</div>
+          <div class="layer-title-sub">基础与数据源</div>
+        </div>
+        <div class="layer-cards-wrapper">
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path></svg>
+              生态环境业务域数据
+            </div>
+            <div class="item-desc">监测数据、污染源数据、项目审批数据、移动执法数据等核心数据库。</div>
+          </div>
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              外部交换数据
+            </div>
+            <div class="item-desc">来自自然资源、气象、水利、城管等协作单位的跨域数据资源。</div>
+          </div>
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+              大数据计算存储资源
+            </div>
+            <div class="item-desc">提供弹性存储算力，支持海量物联网监测数据实时解算。</div>
+          </div>
+          <div class="item-card">
+            <div class="item-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><circle cx="12" cy="20" r="1"></circle></svg>
+              网络环境
+            </div>
+            <div class="item-desc">环境政务专网、物联网监测专网、互联网与数据安全交换物理链路。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧横切“安全管控跨切系统”侧栏 -->
+      <div class="right-sidebar-panel">
+        <div class="sidebar-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+        </div>
+        <div class="sidebar-text">安全管控跨切系统</div>
+        <div class="sidebar-desc">身份 ➔ 权限 ➔ 政策 ➔ 审计</div>
+      </div>
+
+    </div>
+
+    <!-- 底部支撑核心价值栏 -->
+    <div class="chart-footer">
+      <div class="value-pill">
+        <div class="value-icon">🔍</div>
+        <div>
+          <span class="value-title">看得清</span>
+          <span class="value-desc">（数据目录与血缘追溯）</span>
+        </div>
+      </div>
+      <div class="value-pill">
+        <div class="value-icon">🎯</div>
+        <div>
+          <span class="value-title">分得准</span>
+          <span class="value-desc">（字段标准与分类分级）</span>
+        </div>
+      </div>
+      <div class="value-pill">
+        <div class="value-icon">🛡️</div>
+        <div>
+          <span class="value-title">管得住</span>
+          <span class="value-desc">（安全策略与审批审计）</span>
+        </div>
+      </div>
+      <div class="value-pill">
+        <div class="value-icon">🚀</div>
+        <div>
+          <span class="value-title">用得起来</span>
+          <span class="value-desc">（数据API与场景应用）</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="print-tip">
+    💡 专业技巧：您可以在此页面上按 <span>Cmd + P</span> (Mac) 或 <span>Ctrl + P</span> (Windows) 并选择“保存为 PDF”，或使用浏览器自带的“网页整页截图”，获取纤毫毕现的极致高清大图。
+  </div>
+
+</body>
+</html>

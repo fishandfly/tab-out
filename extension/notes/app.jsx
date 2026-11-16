@@ -10,7 +10,10 @@ import TaskItem from '@tiptap/extension-task-item';
 import { Extension } from '@tiptap/core';
 
 const FALLBACK_STORAGE_KEY = 'tab-out-notes-global-v1';
+const MULTI_STORAGE_KEY = 'tab-out-notes-multi-v1';
 const FALLBACK_TITLE = '笔记';
+const DEFAULT_NOTE_NAMES = ['笔记1', '笔记2', '笔记3'];
+const NOTE_COUNT = DEFAULT_NOTE_NAMES.length;
 const EMPTY_CONTENT = {
   type: 'doc',
   content: [
@@ -24,6 +27,23 @@ function cloneJson(value) {
 
 function isNotesContent(value) {
   return value && typeof value === 'object' && !Array.isArray(value) && value.type === 'doc';
+}
+
+function createEmptyNote(title) {
+  return {
+    title,
+    content: cloneJson(EMPTY_CONTENT),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function createDefaultMultiState() {
+  return {
+    activeIndex: 0,
+    showToc: true,
+    showNumbering: false,
+    notes: DEFAULT_NOTE_NAMES.map(createEmptyNote),
+  };
 }
 
 function createFallbackStateApi() {
@@ -99,8 +119,6 @@ function createFallbackStateApi() {
 }
 
 const notesStateApi = window.TabOutNotesState || createFallbackStateApi();
-const NOTES_STORAGE_KEY = notesStateApi.NOTES_STORAGE_KEY || FALLBACK_STORAGE_KEY;
-const DEFAULT_NOTES_TITLE = notesStateApi.DEFAULT_NOTES_TITLE || FALLBACK_TITLE;
 const NOTES_EXPORT_MIME_TYPE = notesStateApi.NOTES_EXPORT_MIME_TYPE || 'text/markdown;charset=utf-8';
 
 function getNotesStorage() {
@@ -135,7 +153,7 @@ function normalizeTitle(title) {
       .replace(/\s+/g, ' ')
       .trim()
     : '';
-  return cleaned || DEFAULT_NOTES_TITLE;
+  return cleaned || FALLBACK_TITLE;
 }
 
 function sanitizeFilenameTitle(title) {
@@ -143,7 +161,7 @@ function sanitizeFilenameTitle(title) {
     .replace(/[\\/:*?"<>|]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  return cleaned || DEFAULT_NOTES_TITLE;
+  return cleaned || FALLBACK_TITLE;
 }
 
 function buildExportFilename(title) {
@@ -151,7 +169,7 @@ function buildExportFilename(title) {
 }
 
 function getTitleFromFilename(filename) {
-  if (typeof filename !== 'string') return DEFAULT_NOTES_TITLE;
+  if (typeof filename !== 'string') return FALLBACK_TITLE;
   const cleaned = filename
     .replace(/\.tiptap\.json$/i, '')
     .replace(/\.json$/i, '')
@@ -172,23 +190,49 @@ function downloadTextFile(filename, content, mimeType = NOTES_EXPORT_MIME_TYPE) 
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-async function loadPersistedDocument() {
+async function loadMultiNotes() {
   const storage = getNotesStorage();
-  const result = await storage.get(NOTES_STORAGE_KEY);
-  const stored = result?.[NOTES_STORAGE_KEY];
-  if (!stored) {
-    return notesStateApi.createEmptyNotesState();
+
+  // Try new multi-key first
+  const result = await storage.get(MULTI_STORAGE_KEY);
+  const stored = result?.[MULTI_STORAGE_KEY];
+  if (stored && Array.isArray(stored.notes) && stored.notes.length > 0) {
+    return {
+      showToc: stored.showToc !== false,
+      showNumbering: stored.showNumbering === true,
+      activeIndex: typeof stored.activeIndex === 'number' && stored.activeIndex < stored.notes.length
+        ? stored.activeIndex
+        : 0,
+      notes: stored.notes.map((n) => ({
+        title: normalizeTitle(n.title),
+        content: isNotesContent(n.content) ? cloneJson(n.content) : cloneJson(EMPTY_CONTENT),
+        updatedAt: typeof n.updatedAt === 'string' ? n.updatedAt : new Date().toISOString(),
+      })),
+    };
   }
-  return notesStateApi.normalizeNotesDocument(stored);
+
+  // Migrate from old single-doc key
+  const oldResult = await storage.get(FALLBACK_STORAGE_KEY);
+  const oldStored = oldResult?.[FALLBACK_STORAGE_KEY];
+  if (oldStored) {
+    const normalized = notesStateApi.normalizeNotesDocument(oldStored);
+    const multi = createDefaultMultiState();
+    multi.notes[0] = {
+      title: normalized.title,
+      content: normalized.content,
+      updatedAt: normalized.updatedAt,
+    };
+    // Persist migrated state so next load hits the new key
+    await storage.set({ [MULTI_STORAGE_KEY]: multi });
+    return multi;
+  }
+
+  return createDefaultMultiState();
 }
 
-async function savePersistedDocument(doc) {
+async function saveMultiNotesPayload(payload) {
   const storage = getNotesStorage();
-  const normalized = notesStateApi.normalizeNotesDocument(doc);
-  await storage.set({
-    [NOTES_STORAGE_KEY]: normalized,
-  });
-  return normalized;
+  await storage.set({ [MULTI_STORAGE_KEY]: payload });
 }
 
 function StrokeIcon({ children, viewBox = '0 0 24 24' }) {
@@ -252,14 +296,49 @@ export default function NotesApp() {
   const fileInputRef = useRef(null);
   const titleInputRef = useRef(null);
   const saveTimerRef = useRef(0);
-  const titleRef = useRef(DEFAULT_NOTES_TITLE);
-  const documentRef = useRef(null);
-  const [initialDocument, setInitialDocument] = useState(null);
+  const titleRef = useRef(FALLBACK_TITLE);
+  const notesRef = useRef(null);
+  const activeIndexRef = useRef(0);
+  const [loaded, setLoaded] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [title, setTitle] = useState(DEFAULT_NOTES_TITLE);
-  const [draftTitle, setDraftTitle] = useState(DEFAULT_NOTES_TITLE);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [title, setTitle] = useState(FALLBACK_TITLE);
+  const [draftTitle, setDraftTitle] = useState(FALLBACK_TITLE);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [showToc, setShowToc] = useState(false);
+  const [showNumbering, setShowNumbering] = useState(false);
+  const showNumberingRef = useRef(showNumbering);
+  const showTocRef = useRef(showToc);
+  const [tocItems, setTocItems] = useState([]);
+
+  function updateTocFromEditor(e) {
+    if (!e) {
+      setTocItems([]);
+      return;
+    }
+    const items = [];
+    const useNumbering = showNumberingRef.current;
+    let h1 = 0, h2 = 0, h3 = 0;
+    e.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'heading') {
+        const level = node.attrs.level;
+        if (level === 1) { h1++; h2 = 0; h3 = 0; }
+        else if (level === 2) { h2++; h3 = 0; }
+        else if (level === 3) { h3++; }
+
+        let prefix = '';
+        if (useNumbering) {
+          if (level === 1) prefix = `${h1}. `;
+          else if (level === 2) prefix = `${h1}.${h2}. `;
+          else if (level === 3) prefix = `${h1}.${h2}.${h3}. `;
+        }
+
+        items.push({ level, text: prefix + node.textContent, pos });
+      }
+    });
+    setTocItems(items);
+  }
 
   const editor = useEditor({
     extensions: [
@@ -306,15 +385,19 @@ export default function NotesApp() {
         window.clearTimeout(saveTimerRef.current);
       }
 
+      const snapshot = nextEditor.getJSON();
       saveTimerRef.current = window.setTimeout(async () => {
         try {
-          const nextDocument = notesStateApi.normalizeNotesDocument({
-            ...(documentRef.current || notesStateApi.createEmptyNotesState()),
-            title: titleRef.current,
-            content: nextEditor.getJSON(),
-          });
-          documentRef.current = nextDocument;
-          await savePersistedDocument(nextDocument);
+          const notes = notesRef.current;
+          const idx = activeIndexRef.current;
+          if (!notes || idx < 0 || idx >= notes.length) return;
+          notes[idx] = {
+            ...notes[idx],
+            content: snapshot,
+            updatedAt: new Date().toISOString(),
+          };
+          notesRef.current = notes;
+          await saveMultiNotesPayload({ activeIndex: idx, showToc: showTocRef.current, showNumbering: showNumberingRef.current, notes });
         } catch (err) {
           console.error('[tab-out] Failed to autosave notes:', err);
         }
@@ -327,24 +410,56 @@ export default function NotesApp() {
   }, [title]);
 
   useEffect(() => {
+    if (!editor) return;
+    const handler = () => updateTocFromEditor(editor);
+    updateTocFromEditor(editor);
+    editor.on('update', handler);
+    return () => { editor.off('update', handler); };
+  }, [editor]);
+
+  useEffect(() => {
+    showNumberingRef.current = showNumbering;
+    showTocRef.current = showToc;
+  });
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.view.dom.classList.toggle('show-heading-numbers', showNumbering);
+    updateTocFromEditor(editor);
+  }, [editor, showNumbering]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const notes = notesRef.current;
+    const idx = activeIndexRef.current;
+    if (!notes) return;
+    saveMultiNotesPayload({ activeIndex: idx, showToc, showNumbering, notes });
+  }, [showToc, showNumbering, loaded]);
+
+  useEffect(() => {
     let disposed = false;
 
-    loadPersistedDocument()
-      .then((doc) => {
+    loadMultiNotes()
+      .then((multi) => {
         if (disposed) return;
-        documentRef.current = doc;
-        setInitialDocument(doc);
-        setTitle(normalizeTitle(doc.title));
-        setDraftTitle(normalizeTitle(doc.title));
+        notesRef.current = multi.notes;
+        activeIndexRef.current = multi.activeIndex;
+        setActiveIndex(multi.activeIndex);
+        setShowToc(multi.showToc);
+        setShowNumbering(multi.showNumbering);
+        setTitle(normalizeTitle(multi.notes[multi.activeIndex].title));
+        setDraftTitle(normalizeTitle(multi.notes[multi.activeIndex].title));
+        setLoaded(true);
       })
       .catch((err) => {
-        console.error('[tab-out] Failed to load notes document:', err);
+        console.error('[tab-out] Failed to load notes:', err);
         if (disposed) return;
-        const fallbackDocument = notesStateApi.createEmptyNotesState();
-        documentRef.current = fallbackDocument;
-        setInitialDocument(fallbackDocument);
-        setTitle(normalizeTitle(fallbackDocument.title));
-        setDraftTitle(normalizeTitle(fallbackDocument.title));
+        const multi = createDefaultMultiState();
+        notesRef.current = multi.notes;
+        setActiveIndex(0);
+        setTitle(normalizeTitle(multi.notes[0].title));
+        setDraftTitle(normalizeTitle(multi.notes[0].title));
+        setLoaded(true);
       });
 
     return () => {
@@ -355,10 +470,16 @@ export default function NotesApp() {
     };
   }, []);
 
+  // Set editor content after initial load
   useEffect(() => {
-    if (!editor || !initialDocument) return;
-    editor.commands.setContent(initialDocument.content, false);
-  }, [editor, initialDocument]);
+    if (!editor || !loaded || !notesRef.current) return;
+    const idx = activeIndexRef.current;
+    const note = notesRef.current[idx];
+    if (note) {
+      editor.commands.setContent(note.content, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, loaded]);
 
   useEffect(() => {
     if (!isEditingTitle) return;
@@ -380,18 +501,58 @@ export default function NotesApp() {
     };
   }, []);
 
-  async function persistCurrentDocument(nextTitle = title) {
-    const normalizedTitle = normalizeTitle(nextTitle);
-    const currentDocument = documentRef.current || notesStateApi.createEmptyNotesState();
-    const nextDocument = notesStateApi.normalizeNotesDocument({
-      ...currentDocument,
-      title: normalizedTitle,
-      content: editor ? editor.getJSON() : currentDocument.content,
-    });
+  async function persistCurrentNote(titleOverride) {
+    const nextTitle = titleOverride ? normalizeTitle(titleOverride) : title;
+    const notes = notesRef.current;
+    const idx = activeIndexRef.current;
+    if (!notes || idx < 0 || idx >= notes.length) return;
 
-    documentRef.current = nextDocument;
-    setInitialDocument(nextDocument);
-    return savePersistedDocument(nextDocument);
+    notes[idx] = {
+      ...notes[idx],
+      title: nextTitle,
+      content: editor ? editor.getJSON() : notes[idx].content,
+      updatedAt: new Date().toISOString(),
+    };
+    notesRef.current = notes;
+    await saveMultiNotesPayload({ activeIndex: idx, showToc, showNumbering, notes });
+  }
+
+  async function handleTabSwitch(newIndex) {
+    if (newIndex === activeIndex || !editor || !notesRef.current) return;
+
+    // Flush any pending auto-save
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = 0;
+    }
+
+    // Save current note content
+    const notes = notesRef.current;
+    const idx = activeIndexRef.current;
+    notes[idx] = {
+      ...notes[idx],
+      content: editor.getJSON(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Switch
+    activeIndexRef.current = newIndex;
+    setActiveIndex(newIndex);
+    const newNote = notes[newIndex];
+    setTitle(newNote.title);
+    setDraftTitle(newNote.title);
+    setIsEditingTitle(false);
+
+    editor.commands.setContent(newNote.content, false);
+    updateTocFromEditor(editor);
+
+    notesRef.current = notes;
+    await saveMultiNotesPayload({ activeIndex: newIndex, showToc, showNumbering, notes });
+  }
+
+  function scrollToHeading(pos) {
+    if (!editor) return;
+    editor.chain().focus().setTextSelection(pos).scrollIntoView().run();
   }
 
   function handleStartTitleEdit() {
@@ -405,7 +566,7 @@ export default function NotesApp() {
     setDraftTitle(nextTitle);
     setIsEditingTitle(false);
     try {
-      await persistCurrentDocument(nextTitle);
+      await persistCurrentNote(nextTitle);
     } catch (err) {
       console.error('[tab-out] Failed to save notes title:', err);
     }
@@ -446,15 +607,25 @@ export default function NotesApp() {
       const nextDocument = notesStateApi.importNotesDocument(text, {
         title: getTitleFromFilename(file.name),
       });
-      documentRef.current = nextDocument;
-      setInitialDocument(nextDocument);
+
+      const notes = notesRef.current;
+      const idx = activeIndexRef.current;
+      if (!notes || idx < 0 || idx >= notes.length) return;
+
+      notes[idx] = {
+        ...notes[idx],
+        title: nextDocument.title,
+        content: nextDocument.content,
+        updatedAt: new Date().toISOString(),
+      };
+      notesRef.current = notes;
       setTitle(nextDocument.title);
       setDraftTitle(nextDocument.title);
       setIsEditingTitle(false);
       if (editor) {
         editor.commands.setContent(nextDocument.content, false);
       }
-      await savePersistedDocument(nextDocument);
+      await saveMultiNotesPayload({ activeIndex: idx, showToc, showNumbering, notes });
     } catch (err) {
       console.error('[tab-out] Failed to import notes:', err);
     } finally {
@@ -462,22 +633,60 @@ export default function NotesApp() {
     }
   }
 
+  async function handleNewDocument() {
+    if (!editor || !loaded || !notesRef.current) return;
+
+    const confirmed = confirm('确定要新建笔记并丢弃当前内容吗？此操作不可撤销。');
+    if (!confirmed) return;
+
+    try {
+      setIsBusy(true);
+      const idx = activeIndexRef.current;
+      const defaultName = DEFAULT_NOTE_NAMES[idx] || `笔记${idx + 1}`;
+      const emptyNote = createEmptyNote(defaultName);
+
+      notesRef.current[idx] = emptyNote;
+      setTitle(defaultName);
+      setDraftTitle(defaultName);
+      setIsEditingTitle(false);
+      editor.commands.setContent(emptyNote.content, false);
+      updateTocFromEditor(editor);
+
+      await saveMultiNotesPayload({
+        activeIndex: idx,
+        showToc: showTocRef.current,
+        showNumbering: showNumberingRef.current,
+        notes: notesRef.current,
+      });
+    } catch (err) {
+      console.error('[tab-out] Failed to create new note:', err);
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   async function handleExportDocument() {
-    const currentDocument = documentRef.current || notesStateApi.createEmptyNotesState();
+    const notes = notesRef.current;
+    const idx = activeIndexRef.current;
+    const currentNote = notes?.[idx];
+    if (!notes || !currentNote) return;
 
     try {
       setIsBusy(true);
       const serialized = notesStateApi.exportNotesDocument({
-        ...currentDocument,
+        ...currentNote,
         title,
-        content: editor ? editor.getJSON() : currentDocument.content,
+        content: editor ? editor.getJSON() : currentNote.content,
       });
-      const nextDocument = notesStateApi.importNotesDocument(serialized, {
-        title,
-      });
-      documentRef.current = nextDocument;
-      setInitialDocument(nextDocument);
-      await savePersistedDocument(nextDocument);
+      const nextDocument = notesStateApi.importNotesDocument(serialized, { title });
+      notes[idx] = {
+        ...currentNote,
+        title: nextDocument.title,
+        content: nextDocument.content,
+        updatedAt: new Date().toISOString(),
+      };
+      notesRef.current = notes;
+      await saveMultiNotesPayload({ activeIndex: idx, showToc, showNumbering, notes });
       downloadTextFile(buildExportFilename(title), serialized, NOTES_EXPORT_MIME_TYPE);
     } catch (err) {
       console.error('[tab-out] Failed to export notes:', err);
@@ -486,7 +695,7 @@ export default function NotesApp() {
     }
   }
 
-  const isEditorReady = Boolean(editor && initialDocument);
+  const isEditorReady = Boolean(editor && loaded);
   const canUndo = Boolean(editor?.can().chain().focus().undo().run());
   const canRedo = Boolean(editor?.can().chain().focus().redo().run());
   const canInsertTable = Boolean(editor?.can().chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run());
@@ -497,6 +706,8 @@ export default function NotesApp() {
   const canDeleteRow = Boolean(editor?.can().chain().focus().deleteRow().run());
   const canDeleteTable = Boolean(editor?.can().chain().focus().deleteTable().run());
   const canToggleHeaderRow = Boolean(editor?.can().chain().focus().toggleHeaderRow().run());
+
+  const currentNoteName = notesRef.current?.[activeIndex]?.title || title;
 
   return (
     <div className={`notes-app${isFullscreen ? ' is-fullscreen' : ''}`} ref={appHostRef}>
@@ -549,6 +760,14 @@ export default function NotesApp() {
             onChange={handleImportChange}
             hidden
           />
+          <button
+            className="notes-toolbar-btn"
+            type="button"
+            onClick={handleNewDocument}
+            disabled={!loaded || isBusy}
+          >
+            新建
+          </button>
           <button className="notes-toolbar-btn" type="button" onClick={handleToggleFullscreen}>
             {isFullscreen ? '退出全屏' : '全屏'}
           </button>
@@ -556,210 +775,271 @@ export default function NotesApp() {
             className="notes-toolbar-btn"
             type="button"
             onClick={handlePickImport}
-            disabled={!initialDocument || isBusy}
+            disabled={!loaded || isBusy}
           >
-            导入 .md
+            导入
           </button>
           <button
             className="notes-toolbar-btn is-primary"
             type="button"
             onClick={handleExportDocument}
-            disabled={!initialDocument || isBusy}
+            disabled={!loaded || isBusy}
           >
-            导出 .md
+            导出
           </button>
         </div>
       </header>
 
-      <section className="notes-editor-shell">
-        {isEditorReady ? (
-          <>
-            <div className="notes-editor-toolbar">
-              <ToolbarButton label="撤销" disabled={!canUndo} onClick={() => editor?.chain().focus().undo().run()}>
-                <StrokeIcon>
-                  <path d="M9 7H5v4" />
-                  <path d="M5 11c2-3 4.5-4 7.5-4 4.6 0 6.5 2.8 6.5 7" />
-                </StrokeIcon>
-              </ToolbarButton>
-              <ToolbarButton label="重做" disabled={!canRedo} onClick={() => editor?.chain().focus().redo().run()}>
-                <StrokeIcon>
-                  <path d="M15 7h4v4" />
-                  <path d="M19 11c-2-3-4.5-4-7.5-4C6.9 7 5 9.8 5 14" />
-                </StrokeIcon>
-              </ToolbarButton>
-              <ToolbarButton
-                label="标题一"
-                active={Boolean(editor?.isActive('heading', { level: 1 }))}
-                disabled={!editor}
-                onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
+      <div className="notes-body">
+        <section className="notes-editor-shell">
+          {isEditorReady ? (
+            <>
+              <div className="notes-editor-toolbar">
+                <ToolbarButton label="撤销" disabled={!canUndo} onClick={() => editor?.chain().focus().undo().run()}>
+                  <StrokeIcon>
+                    <path d="M9 7H5v4" />
+                    <path d="M5 11c2-3 4.5-4 7.5-4 4.6 0 6.5 2.8 6.5 7" />
+                  </StrokeIcon>
+                </ToolbarButton>
+                <ToolbarButton label="重做" disabled={!canRedo} onClick={() => editor?.chain().focus().redo().run()}>
+                  <StrokeIcon>
+                    <path d="M15 7h4v4" />
+                    <path d="M19 11c-2-3-4.5-4-7.5-4C6.9 7 5 9.8 5 14" />
+                  </StrokeIcon>
+                </ToolbarButton>
+                <ToolbarButton
+                  label="标题一"
+                  active={Boolean(editor?.isActive('heading', { level: 1 }))}
+                  disabled={!editor}
+                  onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
+                >
+                  <TextIcon>H1</TextIcon>
+                </ToolbarButton>
+                <ToolbarButton
+                  label="标题二"
+                  active={Boolean(editor?.isActive('heading', { level: 2 }))}
+                  disabled={!editor}
+                  onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+                >
+                  <TextIcon>H2</TextIcon>
+                </ToolbarButton>
+                <ToolbarButton
+                  label="粗体"
+                  active={Boolean(editor?.isActive('bold'))}
+                  disabled={!editor}
+                  onClick={() => editor?.chain().focus().toggleBold().run()}
+                >
+                  <TextIcon>B</TextIcon>
+                </ToolbarButton>
+                <ToolbarButton
+                  label="斜体"
+                  active={Boolean(editor?.isActive('italic'))}
+                  disabled={!editor}
+                  onClick={() => editor?.chain().focus().toggleItalic().run()}
+                >
+                  <TextIcon className="is-italic">I</TextIcon>
+                </ToolbarButton>
+                <ToolbarButton
+                  label="无序列表"
+                  active={Boolean(editor?.isActive('bulletList'))}
+                  disabled={!editor}
+                  onClick={() => editor?.chain().focus().toggleBulletList().run()}
+                >
+                  <StrokeIcon>
+                    <circle cx="6" cy="7" r="1.3" />
+                    <circle cx="6" cy="12" r="1.3" />
+                    <circle cx="6" cy="17" r="1.3" />
+                    <path d="M10 7h8" />
+                    <path d="M10 12h8" />
+                    <path d="M10 17h8" />
+                  </StrokeIcon>
+                </ToolbarButton>
+                <ToolbarButton
+                  label="有序列表"
+                  active={Boolean(editor?.isActive('orderedList'))}
+                  disabled={!editor}
+                  onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+                >
+                  <StrokeIcon>
+                    <path d="M5.2 6.5h1.6V10" />
+                    <path d="M4.8 10h2.4" />
+                    <path d="M4.8 14.2c0-1.2 1.8-1.4 1.8-2.6 0-.5-.4-.8-.9-.8-.5 0-.9.2-1.2.6" />
+                    <path d="M4.8 16.8h2.2" />
+                    <path d="M10 7h8" />
+                    <path d="M10 12h8" />
+                    <path d="M10 17h8" />
+                  </StrokeIcon>
+                </ToolbarButton>
+                <ToolbarButton
+                  label="任务列表"
+                  active={Boolean(editor?.isActive('taskList'))}
+                  disabled={!canToggleTaskList}
+                  onClick={() => toggleOrAppendTaskList(editor)}
+                >
+                  <StrokeIcon>
+                    <rect x="4.8" y="5.2" width="3" height="3" rx="0.45" />
+                    <rect x="4.8" y="10.5" width="3" height="3" rx="0.45" />
+                    <path d="M10 6.7h8" />
+                    <path d="M10 12h8" />
+                    <path d="M5.6 12.1l1.1 1.1 1.9-2.2" />
+                  </StrokeIcon>
+                </ToolbarButton>
+                <ToolbarButton
+                  label="引用"
+                  active={Boolean(editor?.isActive('blockquote'))}
+                  disabled={!editor}
+                  onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+                >
+                  <StrokeIcon>
+                    <path d="M8.5 8H6.8A1.8 1.8 0 0 0 5 9.8v1.4A1.8 1.8 0 0 0 6.8 13H9v3H6.8A3.8 3.8 0 0 1 3 12.2V9.8A3.8 3.8 0 0 1 6.8 6H9" />
+                    <path d="M18.5 8h-1.7A1.8 1.8 0 0 0 15 9.8v1.4A1.8 1.8 0 0 0 16.8 13H19v3h-2.2a3.8 3.8 0 0 1-3.8-3.8V9.8A3.8 3.8 0 0 1 16.8 6H19" />
+                  </StrokeIcon>
+                </ToolbarButton>
+                <ToolbarButton
+                  label="代码块"
+                  active={Boolean(editor?.isActive('codeBlock'))}
+                  disabled={!editor}
+                  onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+                >
+                  <TextIcon className="is-code">&lt;/&gt;</TextIcon>
+                </ToolbarButton>
+                <ToolbarButton label="分割线" disabled={!editor} onClick={() => editor?.chain().focus().setHorizontalRule().run()}>
+                  <StrokeIcon>
+                    <path d="M4 12h16" />
+                  </StrokeIcon>
+                </ToolbarButton>
+                <ToolbarButton label="插入表格" disabled={!canInsertTable} onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>
+                  <StrokeIcon>
+                    <rect x="4" y="5" width="16" height="14" rx="1.5" />
+                    <path d="M4 10h16" />
+                    <path d="M4 14h16" />
+                    <path d="M10 5v14" />
+                    <path d="M15 5v14" />
+                  </StrokeIcon>
+                </ToolbarButton>
+                <ToolbarButton label="加列" disabled={!canAddColumn} onClick={() => editor?.chain().focus().addColumnAfter().run()}>
+                  <StrokeIcon>
+                    <rect x="4" y="6" width="11" height="12" rx="1.5" />
+                    <path d="M9.5 6v12" />
+                    <path d="M18 9v6" />
+                    <path d="M15 12h6" />
+                  </StrokeIcon>
+                </ToolbarButton>
+                <ToolbarButton label="加行" disabled={!canAddRow} onClick={() => editor?.chain().focus().addRowAfter().run()}>
+                  <StrokeIcon>
+                    <rect x="4" y="5" width="12" height="11" rx="1.5" />
+                    <path d="M4 10.5h12" />
+                    <path d="M18 16v6" />
+                    <path d="M15 19h6" />
+                  </StrokeIcon>
+                </ToolbarButton>
+                <ToolbarButton label="删列" disabled={!canDeleteColumn} onClick={() => editor?.chain().focus().deleteColumn().run()}>
+                  <StrokeIcon>
+                    <rect x="4" y="6" width="11" height="12" rx="1.5" />
+                    <path d="M9.5 6v12" />
+                    <path d="M15 12h6" />
+                  </StrokeIcon>
+                </ToolbarButton>
+                <ToolbarButton label="删行" disabled={!canDeleteRow} onClick={() => editor?.chain().focus().deleteRow().run()}>
+                  <StrokeIcon>
+                    <rect x="4" y="5" width="12" height="11" rx="1.5" />
+                    <path d="M4 10.5h12" />
+                    <path d="M15 19h6" />
+                  </StrokeIcon>
+                </ToolbarButton>
+                <ToolbarButton
+                  label="表头"
+                  active={Boolean(editor?.isActive('tableHeader'))}
+                  disabled={!canToggleHeaderRow}
+                  onClick={() => editor?.chain().focus().toggleHeaderRow().run()}
+                >
+                  <StrokeIcon>
+                    <rect x="4" y="5" width="16" height="14" rx="1.5" />
+                    <path d="M4 10h16" />
+                    <path d="M10 5v14" />
+                    <path d="M15 5v14" />
+                    <path d="M4 5h16" />
+                  </StrokeIcon>
+                </ToolbarButton>
+                <ToolbarButton label="删表" disabled={!canDeleteTable} onClick={() => editor?.chain().focus().deleteTable().run()}>
+                  <StrokeIcon>
+                    <rect x="4" y="5" width="16" height="14" rx="1.5" />
+                    <path d="M4 10h16" />
+                    <path d="M10 5v14" />
+                    <path d="M15 5v14" />
+                    <path d="M7 8l10 8" />
+                    <path d="M17 8l-10 8" />
+                  </StrokeIcon>
+                </ToolbarButton>
+                <ToolbarButton
+                  label="目录"
+                  active={showToc}
+                  disabled={!editor}
+                  onClick={() => setShowToc((v) => !v)}
+                >
+                  <StrokeIcon>
+                    <path d="M4.5 6.5h15" />
+                    <path d="M4.5 12h15" />
+                    <path d="M4.5 17.5h15" />
+                  </StrokeIcon>
+                </ToolbarButton>
+                <ToolbarButton
+                  label="自动编号"
+                  active={showNumbering}
+                  disabled={!editor}
+                  onClick={() => setShowNumbering((v) => !v)}
+                >
+                  <TextIcon>1.</TextIcon>
+                </ToolbarButton>
+              </div>
+              <div className="notes-editor-surface">
+                <EditorContent editor={editor} />
+              </div>
+            </>
+          ) : (
+            <div className="notes-loading">正在准备笔记…</div>
+          )}
+        </section>
+
+        {showToc && (
+          <div className="notes-toc-panel">
+            {tocItems.length > 0 ? tocItems.map((item) => (
+              <button
+                key={item.pos}
+                className="notes-toc-item"
+                style={{ paddingLeft: `${12 + (item.level - 1) * 16}px` }}
+                onClick={() => scrollToHeading(item.pos)}
+                title={item.text}
               >
-                <TextIcon>H1</TextIcon>
-              </ToolbarButton>
-              <ToolbarButton
-                label="标题二"
-                active={Boolean(editor?.isActive('heading', { level: 2 }))}
-                disabled={!editor}
-                onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
-              >
-                <TextIcon>H2</TextIcon>
-              </ToolbarButton>
-              <ToolbarButton
-                label="粗体"
-                active={Boolean(editor?.isActive('bold'))}
-                disabled={!editor}
-                onClick={() => editor?.chain().focus().toggleBold().run()}
-              >
-                <TextIcon>B</TextIcon>
-              </ToolbarButton>
-              <ToolbarButton
-                label="斜体"
-                active={Boolean(editor?.isActive('italic'))}
-                disabled={!editor}
-                onClick={() => editor?.chain().focus().toggleItalic().run()}
-              >
-                <TextIcon className="is-italic">I</TextIcon>
-              </ToolbarButton>
-              <ToolbarButton
-                label="无序列表"
-                active={Boolean(editor?.isActive('bulletList'))}
-                disabled={!editor}
-                onClick={() => editor?.chain().focus().toggleBulletList().run()}
-              >
-                <StrokeIcon>
-                  <circle cx="6" cy="7" r="1.3" />
-                  <circle cx="6" cy="12" r="1.3" />
-                  <circle cx="6" cy="17" r="1.3" />
-                  <path d="M10 7h8" />
-                  <path d="M10 12h8" />
-                  <path d="M10 17h8" />
-                </StrokeIcon>
-              </ToolbarButton>
-              <ToolbarButton
-                label="有序列表"
-                active={Boolean(editor?.isActive('orderedList'))}
-                disabled={!editor}
-                onClick={() => editor?.chain().focus().toggleOrderedList().run()}
-              >
-                <StrokeIcon>
-                  <path d="M5.2 6.5h1.6V10" />
-                  <path d="M4.8 10h2.4" />
-                  <path d="M4.8 14.2c0-1.2 1.8-1.4 1.8-2.6 0-.5-.4-.8-.9-.8-.5 0-.9.2-1.2.6" />
-                  <path d="M4.8 16.8h2.2" />
-                  <path d="M10 7h8" />
-                  <path d="M10 12h8" />
-                  <path d="M10 17h8" />
-                </StrokeIcon>
-              </ToolbarButton>
-              <ToolbarButton
-                label="任务列表"
-                active={Boolean(editor?.isActive('taskList'))}
-                disabled={!canToggleTaskList}
-                onClick={() => toggleOrAppendTaskList(editor)}
-              >
-                <StrokeIcon>
-                  <rect x="4.8" y="5.2" width="3" height="3" rx="0.45" />
-                  <rect x="4.8" y="10.5" width="3" height="3" rx="0.45" />
-                  <path d="M10 6.7h8" />
-                  <path d="M10 12h8" />
-                  <path d="M5.6 12.1l1.1 1.1 1.9-2.2" />
-                </StrokeIcon>
-              </ToolbarButton>
-              <ToolbarButton
-                label="引用"
-                active={Boolean(editor?.isActive('blockquote'))}
-                disabled={!editor}
-                onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-              >
-                <StrokeIcon>
-                  <path d="M8.5 8H6.8A1.8 1.8 0 0 0 5 9.8v1.4A1.8 1.8 0 0 0 6.8 13H9v3H6.8A3.8 3.8 0 0 1 3 12.2V9.8A3.8 3.8 0 0 1 6.8 6H9" />
-                  <path d="M18.5 8h-1.7A1.8 1.8 0 0 0 15 9.8v1.4A1.8 1.8 0 0 0 16.8 13H19v3h-2.2a3.8 3.8 0 0 1-3.8-3.8V9.8A3.8 3.8 0 0 1 16.8 6H19" />
-                </StrokeIcon>
-              </ToolbarButton>
-              <ToolbarButton
-                label="代码块"
-                active={Boolean(editor?.isActive('codeBlock'))}
-                disabled={!editor}
-                onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
-              >
-                <TextIcon className="is-code">&lt;/&gt;</TextIcon>
-              </ToolbarButton>
-              <ToolbarButton label="分割线" disabled={!editor} onClick={() => editor?.chain().focus().setHorizontalRule().run()}>
-                <StrokeIcon>
-                  <path d="M4 12h16" />
-                </StrokeIcon>
-              </ToolbarButton>
-              <ToolbarButton label="插入表格" disabled={!canInsertTable} onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>
-                <StrokeIcon>
-                  <rect x="4" y="5" width="16" height="14" rx="1.5" />
-                  <path d="M4 10h16" />
-                  <path d="M4 14h16" />
-                  <path d="M10 5v14" />
-                  <path d="M15 5v14" />
-                </StrokeIcon>
-              </ToolbarButton>
-              <ToolbarButton label="加列" disabled={!canAddColumn} onClick={() => editor?.chain().focus().addColumnAfter().run()}>
-                <StrokeIcon>
-                  <rect x="4" y="6" width="11" height="12" rx="1.5" />
-                  <path d="M9.5 6v12" />
-                  <path d="M18 9v6" />
-                  <path d="M15 12h6" />
-                </StrokeIcon>
-              </ToolbarButton>
-              <ToolbarButton label="加行" disabled={!canAddRow} onClick={() => editor?.chain().focus().addRowAfter().run()}>
-                <StrokeIcon>
-                  <rect x="4" y="5" width="12" height="11" rx="1.5" />
-                  <path d="M4 10.5h12" />
-                  <path d="M18 16v6" />
-                  <path d="M15 19h6" />
-                </StrokeIcon>
-              </ToolbarButton>
-              <ToolbarButton label="删列" disabled={!canDeleteColumn} onClick={() => editor?.chain().focus().deleteColumn().run()}>
-                <StrokeIcon>
-                  <rect x="4" y="6" width="11" height="12" rx="1.5" />
-                  <path d="M9.5 6v12" />
-                  <path d="M15 12h6" />
-                </StrokeIcon>
-              </ToolbarButton>
-              <ToolbarButton label="删行" disabled={!canDeleteRow} onClick={() => editor?.chain().focus().deleteRow().run()}>
-                <StrokeIcon>
-                  <rect x="4" y="5" width="12" height="11" rx="1.5" />
-                  <path d="M4 10.5h12" />
-                  <path d="M15 19h6" />
-                </StrokeIcon>
-              </ToolbarButton>
-              <ToolbarButton
-                label="表头"
-                active={Boolean(editor?.isActive('tableHeader'))}
-                disabled={!canToggleHeaderRow}
-                onClick={() => editor?.chain().focus().toggleHeaderRow().run()}
-              >
-                <StrokeIcon>
-                  <rect x="4" y="5" width="16" height="14" rx="1.5" />
-                  <path d="M4 10h16" />
-                  <path d="M10 5v14" />
-                  <path d="M15 5v14" />
-                  <path d="M4 5h16" />
-                </StrokeIcon>
-              </ToolbarButton>
-              <ToolbarButton label="删表" disabled={!canDeleteTable} onClick={() => editor?.chain().focus().deleteTable().run()}>
-                <StrokeIcon>
-                  <rect x="4" y="5" width="16" height="14" rx="1.5" />
-                  <path d="M4 10h16" />
-                  <path d="M10 5v14" />
-                  <path d="M15 5v14" />
-                  <path d="M7 8l10 8" />
-                  <path d="M17 8l-10 8" />
-                </StrokeIcon>
-              </ToolbarButton>
-            </div>
-            <div className="notes-editor-surface">
-              <EditorContent editor={editor} />
-            </div>
-          </>
-        ) : (
-          <div className="notes-loading">正在准备笔记…</div>
+                {item.text || '(空标题)'}
+              </button>
+            )) : (
+              <div className="notes-toc-empty">当前笔记无标题</div>
+            )}
+          </div>
         )}
-      </section>
+
+        <aside className="notes-tabbar" role="tablist" aria-label="笔记标签">
+          {DEFAULT_NOTE_NAMES.map((name, index) => {
+            const note = notesRef.current?.[index];
+            const displayName = note?.title || name;
+            const isActive = index === activeIndex;
+            return (
+              <button
+                key={index}
+                className={`notes-tab-btn${isActive ? ' is-active' : ''}`}
+                role="tab"
+                aria-selected={isActive}
+                aria-label={displayName}
+                title={displayName}
+                onClick={() => handleTabSwitch(index)}
+              >
+                {displayName}
+              </button>
+            );
+          })}
+        </aside>
+      </div>
     </div>
   );
 }

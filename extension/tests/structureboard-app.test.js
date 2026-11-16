@@ -20,8 +20,8 @@ test('结构图页面源码包含 draw.io iframe、工具栏与状态脚本接�
   assert.match(indexHtml, /state\.js/);
   assert.match(indexHtml, /app\.js/);
   assert.match(indexHtml, /color-scheme" content="light dark"/);
-  assert.match(indexHtml, /导入 \.drawio/);
-  assert.match(indexHtml, /导出 \.drawio/);
+  assert.match(indexHtml, /导入/);
+  assert.match(indexHtml, /导出/);
   assert.match(indexHtml, /全屏/);
   assert.match(appJs, /https:\/\/embed\.diagrams\.net/);
   assert.match(appJs, /format=0/);

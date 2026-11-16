@@ -343,6 +343,36 @@ export default function WhiteboardApp() {
     }
   }
 
+  async function handleNewScene() {
+    const api = apiRef.current;
+    if (!api) return;
+
+    const confirmed = confirm('确定要新建白板并丢弃当前内容吗？此操作不可撤销。');
+    if (!confirmed) return;
+
+    try {
+      setIsBusy(true);
+      const emptyScene = whiteboardStateApi.createEmptyWhiteboardState();
+
+      api.updateScene({
+        elements: [],
+        appState: {},
+        files: {},
+      });
+      api.history.clear();
+
+      setTitle(DEFAULT_WHITEBOARD_TITLE);
+      setDraftTitle(DEFAULT_WHITEBOARD_TITLE);
+      setIsEditingTitle(false);
+      setInitialScene(emptyScene);
+      await savePersistedScene(emptyScene);
+    } catch (err) {
+      console.error('[tab-out] Failed to create new whiteboard:', err);
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   async function handleExportScene() {
     const api = apiRef.current;
     if (!api) return;
@@ -409,6 +439,14 @@ export default function WhiteboardApp() {
             onChange={handleImportChange}
             hidden
           />
+          <button
+            className="whiteboard-toolbar-btn"
+            type="button"
+            onClick={handleNewScene}
+            disabled={!initialScene || isBusy}
+          >
+            新建
+          </button>
           <button className="whiteboard-toolbar-btn" type="button" onClick={handleToggleFullscreen}>
             {isFullscreen ? '退出全屏' : '全屏'}
           </button>
@@ -418,7 +456,7 @@ export default function WhiteboardApp() {
             onClick={handlePickImport}
             disabled={!initialScene || isBusy}
           >
-            导入 .excalidraw
+            导入
           </button>
           <button
             className="whiteboard-toolbar-btn is-primary"
@@ -426,7 +464,7 @@ export default function WhiteboardApp() {
             onClick={handleExportScene}
             disabled={!initialScene || isBusy}
           >
-            导出 .excalidraw
+            导出
           </button>
         </div>
       </header>

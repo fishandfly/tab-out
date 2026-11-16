@@ -8,32 +8,93 @@
   const STORAGE_KEY = 'gtdBoards';
   const CHECKLIST_MAX_LEVEL = 6;
   const SAVED_CHECKLISTS_KEY = 'tab-out-saved-checklists-v1';
+  const QUADRANT_CONFIG_KEY = 'tab-out-gtd-quadrants-v1';
+  const QUICK_LINKS_KEY = 'tab-out-quick-links-v1';
+  const DEFAULT_QUICK_LINKS_PARTITION_ID = 'default';
+  const DEFAULT_QUICK_LINKS_PARTITION_NAME = '常用';
+
+  const DEFAULT_QUADRANT_TITLES = {
+    importantUrgent: '重要且紧急',
+    importantNotUrgent: '重要不紧急',
+    urgentNotImportant: '紧急不重要',
+    notImportantNotUrgent: '不重要不紧急',
+  };
+
+  const DEFAULT_QUADRANT_ORDER = [
+    'importantUrgent',
+    'importantNotUrgent',
+    'urgentNotImportant',
+    'notImportantNotUrgent',
+  ];
+
+  const KANBAN_LANES = [
+    { key: 'todo', title: '待完成', tone: 'muted', empty: '暂无待完成事项' },
+    { key: 'planned', title: '今日计划', tone: 'alert', empty: '把今天打算推进的事项拖拽至此' },
+    { key: 'doing', title: '开始工作', tone: 'steady', empty: '当前正在进行中的事项' },
+    { key: 'done', title: '已完成', tone: 'critical', empty: '今天已完成的事项' },
+  ];
+
+  const KANBAN_LANE_MAP = Object.fromEntries(KANBAN_LANES.map((item) => [item.key, item]));
+  const VALID_KANBAN_STATUSES = new Set(['todo', 'planned', 'doing', 'done']);
+
+  function normalizeKanbanStatus(status, completed = false) {
+    if (completed) return 'done';
+    if (typeof status === 'string' && VALID_KANBAN_STATUSES.has(status)) return status;
+    return 'todo';
+  }
+
+  function normalizeQuadrantOrder(order) {
+    if (!Array.isArray(order)) return [...DEFAULT_QUADRANT_ORDER];
+    const valid = new Set(DEFAULT_QUADRANT_ORDER);
+    const result = [];
+    for (const key of order) {
+      if (valid.has(key) && !result.includes(key)) {
+        result.push(key);
+      }
+    }
+    for (const key of DEFAULT_QUADRANT_ORDER) {
+      if (!result.includes(key)) {
+        result.push(key);
+      }
+    }
+    return result;
+  }
+
+  function swapQuadrantOrder(order, sourceKey, targetKey) {
+    const list = normalizeQuadrantOrder(order);
+    const srcIdx = list.indexOf(sourceKey);
+    const dstIdx = list.indexOf(targetKey);
+    if (srcIdx === -1 || dstIdx === -1 || srcIdx === dstIdx) {
+      return list;
+    }
+    const next = [...list];
+    next[srcIdx] = targetKey;
+    next[dstIdx] = sourceKey;
+    return next;
+  }
+
   const QUADRANTS = [
     {
       key: 'importantUrgent',
       title: '重要且紧急',
-      hint: '今天必须先完成的关键事项',
       empty: '先把今天最不能拖的事情放进来',
       tone: 'critical',
     },
     {
       key: 'importantNotUrgent',
       title: '重要不紧急',
-      hint: '决定长期质量，但容易被挤掉',
       empty: '把值得提前推进的任务安排进来',
       tone: 'steady',
     },
     {
       key: 'urgentNotImportant',
       title: '紧急不重要',
-      hint: '需要处理，但不该吃掉全部注意力',
       empty: '只放那些必须回应的外部事项',
       tone: 'alert',
     },
     {
       key: 'notImportantNotUrgent',
       title: '不重要不紧急',
-      hint: '尽量减少投入，不要让它占满今天',
       empty: '如果这里很多，说明今天的焦点跑偏了',
       tone: 'muted',
     },
@@ -41,6 +102,46 @@
 
   const QUADRANT_MAP = Object.fromEntries(QUADRANTS.map((item) => [item.key, item]));
   const QUADRANT_TITLE_MAP = Object.fromEntries(QUADRANTS.map((item) => [item.title, item.key]));
+
+  function normalizeQuadrantConfig(config) {
+    const raw = config && typeof config === 'object' ? config : {};
+    const res = {
+      importantUrgent: typeof raw.importantUrgent === 'string' && raw.importantUrgent.trim() ? raw.importantUrgent.trim() : DEFAULT_QUADRANT_TITLES.importantUrgent,
+      importantNotUrgent: typeof raw.importantNotUrgent === 'string' && raw.importantNotUrgent.trim() ? raw.importantNotUrgent.trim() : DEFAULT_QUADRANT_TITLES.importantNotUrgent,
+      urgentNotImportant: typeof raw.urgentNotImportant === 'string' && raw.urgentNotImportant.trim() ? raw.urgentNotImportant.trim() : DEFAULT_QUADRANT_TITLES.urgentNotImportant,
+      notImportantNotUrgent: typeof raw.notImportantNotUrgent === 'string' && raw.notImportantNotUrgent.trim() ? raw.notImportantNotUrgent.trim() : DEFAULT_QUADRANT_TITLES.notImportantNotUrgent,
+    };
+    if (raw.order) {
+      res.order = normalizeQuadrantOrder(raw.order);
+    }
+    return res;
+  }
+
+  async function getQuadrantConfig(storage) {
+    if (!storage || typeof storage.get !== 'function') return { ...DEFAULT_QUADRANT_TITLES };
+    const result = await storage.get(QUADRANT_CONFIG_KEY);
+    return normalizeQuadrantConfig(result && result[QUADRANT_CONFIG_KEY]);
+  }
+
+  async function saveQuadrantConfig(storage, config) {
+    const normalized = normalizeQuadrantConfig(config);
+    if (storage && typeof storage.set === 'function') {
+      await storage.set({ [QUADRANT_CONFIG_KEY]: normalized });
+    }
+    return normalized;
+  }
+
+  function getQuadrants(quadrantConfig) {
+    const config = normalizeQuadrantConfig(quadrantConfig);
+    const order = config.order ? normalizeQuadrantOrder(config.order) : DEFAULT_QUADRANT_ORDER;
+    return order.map((key) => {
+      const q = QUADRANT_MAP[key] || QUADRANTS[0];
+      return {
+        ...q,
+        title: config[q.key] || q.title,
+      };
+    });
+  }
 
   function pad(value) {
     return String(value).padStart(2, '0');
@@ -84,14 +185,42 @@
     return Math.max(0, Math.min(CHECKLIST_MAX_LEVEL, safeLevel));
   }
 
+  function getCompletedTimeValue(item) {
+    if (!item) return 0;
+    const raw = item.completedAt || item.createdAt || '';
+    if (!raw) return 0;
+    const ms = Date.parse(raw);
+    return Number.isFinite(ms) ? ms : 0;
+  }
+
+  function sortCompletedDesc(items) {
+    if (!Array.isArray(items) || items.length <= 1) return Array.isArray(items) ? [...items] : [];
+    return items
+      .map((item, originalIndex) => ({ item, originalIndex }))
+      .sort((a, b) => {
+        const timeDiff = getCompletedTimeValue(b.item) - getCompletedTimeValue(a.item);
+        if (timeDiff !== 0) return timeDiff;
+        const rawA = a.item?.completedAt || a.item?.createdAt || '';
+        const rawB = b.item?.completedAt || b.item?.createdAt || '';
+        const strCmp = rawB.localeCompare(rawA);
+        if (strCmp !== 0) return strCmp;
+        return b.originalIndex - a.originalIndex;
+      })
+      .map((wrapper) => wrapper.item);
+  }
+
   function normalizeChecklistItem(item) {
+    const completed = Boolean(item?.completed);
+    const status = normalizeKanbanStatus(item?.status, completed);
     return {
       id: typeof item?.id === 'string' && item.id ? item.id : createId('step'),
       text: typeof item?.text === 'string' ? item.text.trim() : '',
       level: clampChecklistLevel(item?.level),
-      completed: Boolean(item?.completed),
+      completed: status === 'done' || completed,
+      status,
+      emoji: typeof item?.emoji === 'string' ? item.emoji.trim() : '',
       createdAt: item?.createdAt || nowIso(),
-      completedAt: item?.completed ? (item?.completedAt || nowIso()) : '',
+      completedAt: (status === 'done' || completed) ? (item?.completedAt || item?.createdAt || nowIso()) : '',
     };
   }
 
@@ -99,14 +228,20 @@
     const checklist = Array.isArray(task?.checklist)
       ? task.checklist.map(normalizeChecklistItem).filter((item) => item.text)
       : [];
+    const completed = Boolean(task?.completed);
+    const status = normalizeKanbanStatus(task?.status, completed);
 
     return {
       id: typeof task?.id === 'string' && task.id ? task.id : createId('task'),
       title: typeof task?.title === 'string' ? task.title.trim() : '',
       quadrant: isValidQuadrant(task?.quadrant) ? task.quadrant : 'importantUrgent',
-      completed: Boolean(task?.completed),
+      completed: status === 'done' || completed,
+      status,
+      emoji: typeof task?.emoji === 'string' ? task.emoji.trim() : '',
+      archived: Boolean(task?.archived),
       createdAt: task?.createdAt || nowIso(),
-      completedAt: task?.completed ? (task?.completedAt || nowIso()) : '',
+      completedAt: (status === 'done' || completed) ? (task?.completedAt || task?.createdAt || nowIso()) : '',
+      archivedAt: task?.archived ? (task?.archivedAt || nowIso()) : '',
       checklist,
     };
   }
@@ -115,8 +250,9 @@
     const tasks = Array.isArray(board?.tasks)
       ? board.tasks.map(normalizeTask).filter((task) => task.title)
       : [];
+    const visibleTasks = tasks.filter((task) => !task.archived);
     const selectedTaskId = typeof board?.selectedTaskId === 'string' ? board.selectedTaskId : '';
-    const selectedExists = selectedTaskId && tasks.some((task) => task.id === selectedTaskId);
+    const selectedExists = selectedTaskId && visibleTasks.some((task) => task.id === selectedTaskId);
 
     return {
       date: typeof board?.date === 'string' && board.date ? board.date : fallbackDate,
@@ -145,7 +281,7 @@
   }
 
   function getQuadrantTasks(board, quadrant) {
-    return normalizeBoard(board).tasks.filter((task) => task.quadrant === quadrant);
+    return normalizeBoard(board).tasks.filter((task) => !task.archived && task.quadrant === quadrant);
   }
 
   function getTaskProgress(task) {
@@ -159,7 +295,7 @@
   function getSelectedTask(board) {
     const normalized = normalizeBoard(board);
     if (!normalized.selectedTaskId) return null;
-    return normalized.tasks.find((task) => task.id === normalized.selectedTaskId) || null;
+    return normalized.tasks.find((task) => !task.archived && task.id === normalized.selectedTaskId) || null;
   }
 
   function addTask(board, quadrant, title) {
@@ -172,6 +308,7 @@
       title: cleanedTitle,
       quadrant,
       completed: false,
+      archived: false,
       createdAt: nowIso(),
       checklist: [],
     });
@@ -181,7 +318,7 @@
 
   function selectTask(board, taskId) {
     const normalized = normalizeBoard(board);
-    const exists = normalized.tasks.some((task) => task.id === taskId);
+    const exists = normalized.tasks.some((task) => !task.archived && task.id === taskId);
     return touchBoard(normalized, normalized.tasks, exists ? taskId : '');
   }
 
@@ -190,13 +327,34 @@
     const tasks = normalized.tasks.map((task) => {
       if (task.id !== taskId) return task;
       const nextCompleted = typeof completed === 'boolean' ? completed : !task.completed;
+      const justCompleted = nextCompleted && !task.completed;
       return normalizeTask({
         ...task,
         completed: nextCompleted,
-        completedAt: nextCompleted ? nowIso() : '',
+        status: nextCompleted ? 'done' : (task.status === 'done' ? 'todo' : task.status),
+        completedAt: nextCompleted ? (justCompleted ? nowIso() : (task.completedAt || nowIso())) : '',
       });
     });
     return touchBoard(normalized, tasks, normalized.selectedTaskId);
+  }
+
+  function archiveTask(board, taskId, archived = true) {
+    const normalized = normalizeBoard(board);
+    const isArchived = Boolean(archived);
+    const tasks = normalized.tasks.map((task) => {
+      if (task.id !== taskId) return task;
+      return normalizeTask({
+        ...task,
+        archived: isArchived,
+        archivedAt: isArchived ? (task.archivedAt || nowIso()) : '',
+      });
+    });
+    const selectedTaskId = normalized.selectedTaskId === taskId && isArchived ? '' : normalized.selectedTaskId;
+    return touchBoard(normalized, tasks, selectedTaskId);
+  }
+
+  function restoreTask(board, taskId) {
+    return archiveTask(board, taskId, false);
   }
 
   function deleteTask(board, taskId) {
@@ -264,6 +422,43 @@
     return touchBoard(normalized, tasks, normalized.selectedTaskId);
   }
 
+  // 将多行文本按折行拆分为步骤文本，忽略空行并去掉首尾空白
+  function splitBatchStepLines(raw) {
+    if (typeof raw !== 'string') return [];
+    return raw
+      .replace(/\r\n?/g, '\n')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line);
+  }
+
+  // 按文本数组为任务批量追加 checklist 步骤
+  function addChecklistItems(board, taskId, texts) {
+    const cleanedTexts = Array.isArray(texts)
+      ? texts.map((text) => (typeof text === 'string' ? text.trim() : '')).filter((text) => text)
+      : [];
+    if (!cleanedTexts.length) return normalizeBoard(board);
+
+    const normalized = normalizeBoard(board);
+    const tasks = normalized.tasks.map((task) => {
+      if (task.id !== taskId) return task;
+      return normalizeTask({
+        ...task,
+        checklist: [
+          ...task.checklist,
+          ...cleanedTexts.map((text) => ({
+            id: createId('step'),
+            text,
+            completed: false,
+            createdAt: nowIso(),
+          })),
+        ],
+      });
+    });
+
+    return touchBoard(normalized, tasks, normalized.selectedTaskId);
+  }
+
   function toggleChecklistItemCompleted(board, taskId, itemId, completed) {
     const normalized = normalizeBoard(board);
     const tasks = normalized.tasks.map((task) => {
@@ -273,10 +468,12 @@
         checklist: task.checklist.map((item) => {
           if (item.id !== itemId) return item;
           const nextCompleted = typeof completed === 'boolean' ? completed : !item.completed;
+          const justCompleted = nextCompleted && !item.completed;
           return normalizeChecklistItem({
             ...item,
             completed: nextCompleted,
-            completedAt: nextCompleted ? nowIso() : '',
+            status: nextCompleted ? 'done' : (item.status === 'done' ? 'todo' : item.status),
+            completedAt: nextCompleted ? (justCompleted ? nowIso() : (item.completedAt || nowIso())) : '',
           });
         }),
       });
@@ -320,6 +517,93 @@
     return touchBoard(normalized, tasks, normalized.selectedTaskId);
   }
 
+  function updateTaskKanbanStatus(board, taskId, nextStatus) {
+    const normalized = normalizeBoard(board);
+    const status = normalizeKanbanStatus(nextStatus, nextStatus === 'done');
+    const isDone = status === 'done';
+
+    const tasks = normalized.tasks.map((task) => {
+      if (task.id !== taskId) return task;
+      const taskJustCompleted = isDone && !task.completed;
+      const nextChecklist = task.checklist.map((item) => {
+        const stepJustCompleted = isDone && !item.completed;
+        return normalizeChecklistItem({
+          ...item,
+          status,
+          completed: isDone,
+          completedAt: isDone ? (stepJustCompleted ? nowIso() : (item.completedAt || nowIso())) : '',
+        });
+      });
+
+      return normalizeTask({
+        ...task,
+        status,
+        completed: isDone,
+        completedAt: isDone ? (taskJustCompleted ? nowIso() : (task.completedAt || nowIso())) : '',
+        checklist: nextChecklist,
+      });
+    });
+
+    return touchBoard(normalized, tasks, normalized.selectedTaskId);
+  }
+
+  function updateChecklistItemKanbanStatus(board, taskId, itemId, nextStatus) {
+    const normalized = normalizeBoard(board);
+    const status = normalizeKanbanStatus(nextStatus, nextStatus === 'done');
+    const isDone = status === 'done';
+
+    const tasks = normalized.tasks.map((task) => {
+      if (task.id !== taskId) return task;
+      return normalizeTask({
+        ...task,
+        checklist: task.checklist.map((item) => {
+          if (item.id !== itemId) return item;
+          const justCompleted = isDone && !item.completed;
+          return normalizeChecklistItem({
+            ...item,
+            status,
+            completed: isDone,
+            completedAt: isDone ? (justCompleted ? nowIso() : (item.completedAt || nowIso())) : '',
+          });
+        }),
+      });
+    });
+
+    return touchBoard(normalized, tasks, normalized.selectedTaskId);
+  }
+
+  function updateTaskEmoji(board, taskId, emoji) {
+    const normalized = normalizeBoard(board);
+    const cleanEmoji = typeof emoji === 'string' ? emoji.trim() : '';
+    const tasks = normalized.tasks.map((task) => {
+      if (task.id !== taskId) return task;
+      return normalizeTask({
+        ...task,
+        emoji: cleanEmoji,
+      });
+    });
+    return touchBoard(normalized, tasks, normalized.selectedTaskId);
+  }
+
+  function updateChecklistItemEmoji(board, taskId, itemId, emoji) {
+    const normalized = normalizeBoard(board);
+    const cleanEmoji = typeof emoji === 'string' ? emoji.trim() : '';
+    const tasks = normalized.tasks.map((task) => {
+      if (task.id !== taskId) return task;
+      return normalizeTask({
+        ...task,
+        checklist: task.checklist.map((item) => {
+          if (item.id !== itemId) return item;
+          return normalizeChecklistItem({
+            ...item,
+            emoji: cleanEmoji,
+          });
+        }),
+      });
+    });
+    return touchBoard(normalized, tasks, normalized.selectedTaskId);
+  }
+
   function getChecklistSubtreeEndIndex(checklist, startIndex) {
     const rootItem = checklist[startIndex];
     if (!rootItem) return startIndex;
@@ -329,6 +613,61 @@
       endIndex += 1;
     }
     return endIndex;
+  }
+
+  function computeStepTreeVisibility(steps, expandedStepIds = {}, options = {}) {
+    if (!Array.isArray(steps) || steps.length === 0) return [];
+    const editingStepId = options.editingStepId;
+    const count = steps.length;
+    const meta = new Array(count);
+
+    for (let i = 0; i < count; i += 1) {
+      const current = steps[i];
+      let childCount = 0;
+      let j = i + 1;
+      while (j < count && steps[j].level > current.level) {
+        childCount += 1;
+        j += 1;
+      }
+      meta[i] = {
+        hasChildren: childCount > 0,
+        childCount,
+        isExpanded: Boolean(expandedStepIds?.[current.id]),
+        isVisible: true,
+      };
+    }
+
+    if (editingStepId) {
+      const editIdx = steps.findIndex((s) => s.id === editingStepId);
+      if (editIdx !== -1) {
+        let curLevel = steps[editIdx].level;
+        for (let k = editIdx - 1; k >= 0; k -= 1) {
+          if (steps[k].level < curLevel) {
+            meta[k].isExpanded = true;
+            curLevel = steps[k].level;
+          }
+        }
+      }
+    }
+
+    const stack = [];
+    for (let i = 0; i < count; i += 1) {
+      const current = steps[i];
+      while (stack.length > 0 && stack[stack.length - 1].level >= current.level) {
+        stack.pop();
+      }
+      const isHiddenByAncestor = stack.some((anc) => !anc.isExpanded);
+      meta[i].isVisible = !isHiddenByAncestor;
+
+      if (meta[i].hasChildren) {
+        stack.push({
+          level: current.level,
+          isExpanded: meta[i].isExpanded,
+        });
+      }
+    }
+
+    return meta;
   }
 
   function moveChecklistItem(board, taskId, itemId, targetItemId, options = {}) {
@@ -400,25 +739,7 @@
 
   async function getTodayBoard(storage, date = new Date()) {
     const boardDate = getBoardDate(date);
-    const boards = await getBoards(storage);
-    const existing = boards[boardDate];
-    if (existing) return normalizeBoard(existing, boardDate);
-
-    // No board for today — fall back to most recent board instead of creating empty.
-    // User can manually clear with the "清空" button to start fresh.
-    const dates = Object.keys(boards).sort().reverse();
-    for (const d of dates) {
-      if (boards[d] && boards[d].tasks?.length) {
-        const result = normalizeBoard(boards[d]);
-        result.date = boardDate;
-        result.updatedAt = nowIso();
-        return result;
-      }
-    }
-
-    const empty = createEmptyBoard(boardDate);
-    await saveBoard(storage, empty, boards);
-    return empty;
+    return getScopeBoard(storage, boardDate);
   }
 
   async function updateTodayBoard(storage, updater, date = new Date()) {
@@ -432,7 +753,43 @@
     const boards = await getBoards(storage);
     const existing = boards[boardKey];
     if (existing) return normalizeBoard(existing, boardKey);
-    return createEmptyBoard(boardKey);
+
+    let scopeType = '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(boardKey)) {
+      scopeType = 'day';
+    } else if (/^week-/.test(boardKey)) {
+      scopeType = 'week';
+    } else if (/^month-/.test(boardKey)) {
+      scopeType = 'month';
+    }
+
+    if (scopeType) {
+      const keys = Object.keys(boards).filter((k) => {
+        if (scopeType === 'day') return /^\d{4}-\d{2}-\d{2}$/.test(k);
+        if (scopeType === 'week') return /^week-/.test(k);
+        if (scopeType === 'month') return /^month-/.test(k);
+        return false;
+      }).sort().reverse();
+
+      for (const k of keys) {
+        const boardTasks = boards[k]?.tasks || [];
+        const activeTasks = boardTasks.filter((t) => !t.archived);
+        if (activeTasks.length) {
+          const result = normalizeBoard({
+            ...boards[k],
+            tasks: activeTasks,
+          }, boardKey);
+          result.date = boardKey;
+          result.updatedAt = nowIso();
+          await saveBoard(storage, result, boards);
+          return result;
+        }
+      }
+    }
+
+    const empty = createEmptyBoard(boardKey);
+    await saveBoard(storage, empty, boards);
+    return empty;
   }
 
   async function saveScopeBoard(storage, board) {
@@ -474,6 +831,525 @@
     await storage.set({ [SAVED_CHECKLISTS_KEY]: all.filter((item) => item.id !== id) });
   }
 
+  function normalizeQuickLinksState(raw) {
+    if (!raw || typeof raw !== 'object') {
+      return {
+        partitions: [
+          { id: DEFAULT_QUICK_LINKS_PARTITION_ID, name: DEFAULT_QUICK_LINKS_PARTITION_NAME, links: [] },
+        ],
+      };
+    }
+
+    let partitions = Array.isArray(raw.partitions) ? raw.partitions : [];
+    if (partitions.length === 0) {
+      partitions = [
+        { id: DEFAULT_QUICK_LINKS_PARTITION_ID, name: DEFAULT_QUICK_LINKS_PARTITION_NAME, links: [] },
+      ];
+    }
+
+    const normalizedPartitions = [];
+    const seenPartitionIds = new Set();
+
+    for (const part of partitions) {
+      if (!part || typeof part !== 'object') continue;
+      let id = typeof part.id === 'string' && part.id.trim() ? part.id.trim() : createId('part');
+      if (seenPartitionIds.has(id)) {
+        id = `${id}_${Math.random().toString(36).slice(2, 6)}`;
+      }
+      seenPartitionIds.add(id);
+
+      const name = typeof part.name === 'string' && part.name.trim() ? part.name.trim() : '分区';
+      const rawLinks = Array.isArray(part.links) ? part.links : [];
+      const normalizedLinks = [];
+      const seenLinkIds = new Set();
+
+      for (const link of rawLinks) {
+        if (!link || typeof link !== 'object') continue;
+        const url = typeof link.url === 'string' ? link.url.trim() : '';
+        if (!url) continue;
+
+        let linkId = typeof link.id === 'string' && link.id.trim() ? link.id.trim() : createId('ql');
+        if (seenLinkIds.has(linkId)) {
+          linkId = `${linkId}_${Math.random().toString(36).slice(2, 6)}`;
+        }
+        seenLinkIds.add(linkId);
+
+        let title = typeof link.title === 'string' && link.title.trim() ? link.title.trim() : '';
+        if (!title) {
+          try {
+            title = new URL(url).hostname.replace(/^www\./, '');
+          } catch {
+            title = url;
+          }
+        }
+
+        normalizedLinks.push({
+          id: linkId,
+          title,
+          url,
+        });
+      }
+
+      normalizedPartitions.push({
+        id,
+        name,
+        links: normalizedLinks,
+      });
+    }
+
+    if (normalizedPartitions.length === 0) {
+      normalizedPartitions.push({
+        id: DEFAULT_QUICK_LINKS_PARTITION_ID,
+        name: DEFAULT_QUICK_LINKS_PARTITION_NAME,
+        links: [],
+      });
+    }
+
+    return { partitions: normalizedPartitions };
+  }
+
+  async function getQuickLinks(storage) {
+    if (!storage || typeof storage.get !== 'function') {
+      return normalizeQuickLinksState(null);
+    }
+    const result = await storage.get(QUICK_LINKS_KEY);
+    return normalizeQuickLinksState(result && typeof result === 'object' ? result[QUICK_LINKS_KEY] : null);
+  }
+
+  async function saveQuickLinks(storage, state) {
+    const normalized = normalizeQuickLinksState(state);
+    if (storage && typeof storage.set === 'function') {
+      await storage.set({ [QUICK_LINKS_KEY]: normalized });
+    }
+    return normalized;
+  }
+
+  function addQuickLink(state, partitionId, linkData) {
+    const next = normalizeQuickLinksState(state);
+    if (!linkData || typeof linkData !== 'object' || !linkData.url) return next;
+
+    let targetPart = next.partitions.find((p) => p.id === partitionId);
+    if (!targetPart) {
+      targetPart = next.partitions[0];
+    }
+
+    const url = String(linkData.url).trim();
+    if (!url) return next;
+
+    let title = typeof linkData.title === 'string' && linkData.title.trim() ? linkData.title.trim() : '';
+    if (!title) {
+      try {
+        title = new URL(url).hostname.replace(/^www\./, '');
+      } catch {
+        title = url;
+      }
+    }
+
+    const newLink = {
+      id: typeof linkData.id === 'string' && linkData.id.trim() ? linkData.id.trim() : createId('ql'),
+      title,
+      url,
+    };
+
+    const existingIndex = targetPart.links.findIndex((l) => l.url === url);
+    if (existingIndex >= 0) {
+      targetPart.links[existingIndex].title = title;
+    } else {
+      targetPart.links.push(newLink);
+    }
+
+    return next;
+  }
+
+  function removeQuickLink(state, partitionId, linkId) {
+    const next = normalizeQuickLinksState(state);
+    if (!linkId) return next;
+
+    for (const part of next.partitions) {
+      if (!partitionId || part.id === partitionId) {
+        part.links = part.links.filter((l) => l.id !== linkId);
+      }
+    }
+    return next;
+  }
+
+  function moveQuickLink(state, linkId, targetPartitionId, targetIndex = -1) {
+    const next = normalizeQuickLinksState(state);
+    if (!linkId) return next;
+
+    let foundLink = null;
+    for (const part of next.partitions) {
+      const idx = part.links.findIndex((l) => l.id === linkId);
+      if (idx >= 0) {
+        foundLink = part.links.splice(idx, 1)[0];
+        break;
+      }
+    }
+
+    if (!foundLink) return next;
+
+    let targetPart = next.partitions.find((p) => p.id === targetPartitionId);
+    if (!targetPart) {
+      targetPart = next.partitions[0];
+    }
+
+    if (typeof targetIndex === 'number' && targetIndex >= 0 && targetIndex <= targetPart.links.length) {
+      targetPart.links.splice(targetIndex, 0, foundLink);
+    } else {
+      targetPart.links.push(foundLink);
+    }
+
+    return next;
+  }
+
+  function addQuickLinksPartition(state, name) {
+    const next = normalizeQuickLinksState(state);
+    const trimmed = typeof name === 'string' ? name.trim() : '';
+    const partName = trimmed || `分区 ${next.partitions.length + 1}`;
+    next.partitions.push({
+      id: createId('part'),
+      name: partName,
+      links: [],
+    });
+    return next;
+  }
+
+  function removeQuickLinksPartition(state, partitionId) {
+    const next = normalizeQuickLinksState(state);
+    if (next.partitions.length <= 1) return next;
+
+    const partIndex = next.partitions.findIndex((p) => p.id === partitionId);
+    if (partIndex < 0) return next;
+
+    const removed = next.partitions.splice(partIndex, 1)[0];
+    if (removed && removed.links.length > 0 && next.partitions.length > 0) {
+      for (const link of removed.links) {
+        if (!next.partitions[0].links.some((l) => l.url === link.url)) {
+          next.partitions[0].links.push(link);
+        }
+      }
+    }
+
+    return next;
+  }
+
+  function renameQuickLinksPartition(state, partitionId, newName) {
+    const next = normalizeQuickLinksState(state);
+    const trimmed = typeof newName === 'string' ? newName.trim() : '';
+    if (!trimmed) return next;
+
+    const targetPart = next.partitions.find((p) => p.id === partitionId);
+    if (targetPart) {
+      targetPart.name = trimmed;
+    }
+    return next;
+  }
+
+  function renderQuickLinksBar(quickLinksState, options = {}) {
+    const state = normalizeQuickLinksState(quickLinksState);
+    const partitions = state.partitions;
+
+    return `
+      <div
+        class="gtd-quick-links-bar"
+        data-gtd-component="quick-links-bar"
+        data-gtd-drop-zone="quick-links-bar"
+        role="region"
+        aria-label="常用链接"
+      >
+        <div class="gtd-quick-links-header">
+          <div class="gtd-quick-links-badge" title="常用链接：拖拽标签至此添加，拖拽到外部删除">
+            <svg class="gtd-quick-links-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-1.428 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+            </svg>
+            <span class="gtd-quick-links-title">常用链接</span>
+          </div>
+        </div>
+
+        <div class="gtd-quick-links-partitions-track">
+          ${partitions.map((partition) => `
+            <div
+              class="gtd-quick-links-partition"
+              data-partition-id="${escapeHtml(partition.id)}"
+              data-gtd-drop-zone="quick-links-partition"
+            >
+              <div
+                class="gtd-partition-pill"
+                data-partition-id="${escapeHtml(partition.id)}"
+                data-partition-name="${escapeHtml(partition.name)}"
+                title="双击重命名分区"
+              >
+                <span class="gtd-partition-pill-name">${escapeHtml(partition.name)}</span>
+                ${partitions.length > 1 ? `
+                  <button
+                    class="gtd-partition-pill-del"
+                    type="button"
+                    data-gtd-action="delete-quick-links-partition"
+                    data-partition-id="${escapeHtml(partition.id)}"
+                    data-partition-name="${escapeHtml(partition.name)}"
+                    title="删除分区「${escapeHtml(partition.name)}」"
+                  >&times;</button>
+                ` : ''}
+              </div>
+              <div class="gtd-partition-links-group" data-partition-id="${escapeHtml(partition.id)}">
+                ${partition.links.length === 0 ? `
+                  <span
+                    class="gtd-partition-drop-hint"
+                    data-partition-id="${escapeHtml(partition.id)}"
+                    title="可将标签拖拽到此分区"
+                  >拖拽标签至此</span>
+                ` : partition.links.map((link) => {
+                  let domain = '';
+                  try { domain = new URL(link.url).hostname; } catch {}
+                  const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=16` : '';
+                  return `
+                    <button
+                      class="gtd-quick-link-btn"
+                      type="button"
+                      draggable="true"
+                      data-gtd-action="open-quick-link"
+                      data-link-id="${escapeHtml(link.id)}"
+                      data-partition-id="${escapeHtml(partition.id)}"
+                      data-link-url="${escapeHtml(link.url)}"
+                      data-link-title="${escapeHtml(link.title)}"
+                      title="${escapeHtml(link.title)}&#10;${escapeHtml(link.url)}&#10;提示：拖拽到外部即可删除，拖拽到其他分区可分类"
+                    >
+                      ${faviconUrl ? `<img class="gtd-quick-link-favicon" src="${faviconUrl}" alt="" data-hide-on-error="true" />` : `
+                        <svg class="gtd-quick-link-icon-fallback" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" />
+                        </svg>
+                      `}
+                      <span class="gtd-quick-link-text">${escapeHtml(link.title)}</span>
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `).join('')}
+
+          <button
+            class="gtd-quick-links-add-partition-btn"
+            type="button"
+            data-gtd-action="add-quick-links-partition"
+            title="添加新分区"
+          >
+            <svg class="gtd-quick-links-plus-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 3a1 1 0 0 1 1 1v5h5a1 1 0 1 1 0 2h-5v5a1 1 0 1 1-2 0v-5H4a1 1 0 1 1 0-2h5V4a1 1 0 0 1 1-1z" clip-rule="evenodd" />
+            </svg>
+            <span>分区</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  function formatScopeDate(key) {
+    if (!key) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+      return key;
+    }
+    const weekMatch = key.match(/^week-(\d{4})-W(\d+)$/);
+    if (weekMatch) {
+      return `${weekMatch[1]}年第${weekMatch[2]}周`;
+    }
+    const monthMatch = key.match(/^month-(\d{4})-(\d{2})$/);
+    if (monthMatch) {
+      return `${monthMatch[1]}年${Number(monthMatch[2])}月`;
+    }
+    return key;
+  }
+
+  function formatArchiveTime(isoStr) {
+    if (!isoStr) return '';
+    try {
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return '';
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}`;
+    } catch {
+      return '';
+    }
+  }
+
+  async function getArchivedTasks(storage, query = '') {
+    const boards = await getBoards(storage);
+    const results = [];
+    const lowerQuery = (query || '').trim().toLowerCase();
+    const seenTaskIds = new Set();
+
+    const boardKeys = Object.keys(boards).sort().reverse();
+    for (const key of boardKeys) {
+      const board = boards[key];
+      if (!board || !Array.isArray(board.tasks)) continue;
+
+      for (const task of board.tasks) {
+        if (!task.archived) continue;
+        if (seenTaskIds.has(task.id)) continue;
+        seenTaskIds.add(task.id);
+
+        if (lowerQuery) {
+          const matchTitle = (task.title || '').toLowerCase().includes(lowerQuery);
+          const matchStep = Array.isArray(task.checklist) && task.checklist.some((item) =>
+            (item.text || '').toLowerCase().includes(lowerQuery)
+          );
+          const matchDate = (key || '').toLowerCase().includes(lowerQuery);
+          const matchQuadrant = (DEFAULT_QUADRANT_TITLES[task.quadrant] || '').toLowerCase().includes(lowerQuery);
+          if (!matchTitle && !matchStep && !matchDate && !matchQuadrant) continue;
+        }
+
+        results.push({
+          ...task,
+          boardKey: key,
+          boardDate: board.date || key,
+        });
+      }
+    }
+
+    results.sort((a, b) => {
+      const timeA = a.archivedAt || a.createdAt || '';
+      const timeB = b.archivedAt || b.createdAt || '';
+      return timeB.localeCompare(timeA);
+    });
+
+    return results;
+  }
+
+  async function restoreArchivedTask(storage, boardKey, taskId, currentScopeKey = '') {
+    const boards = await getBoards(storage);
+    const sourceBoard = boards[boardKey];
+    if (!sourceBoard || !Array.isArray(sourceBoard.tasks)) return null;
+
+    const taskIndex = sourceBoard.tasks.findIndex((t) => t.id === taskId);
+    if (taskIndex === -1) return null;
+    const task = sourceBoard.tasks[taskIndex];
+
+    if (!currentScopeKey || currentScopeKey === boardKey) {
+      const nextSourceBoard = archiveTask(sourceBoard, taskId, false);
+      nextSourceBoard.selectedTaskId = taskId;
+      await saveBoard(storage, nextSourceBoard, boards);
+      return nextSourceBoard;
+    }
+
+    const currentBoard = boards[currentScopeKey]
+      ? normalizeBoard(boards[currentScopeKey], currentScopeKey)
+      : createEmptyBoard(currentScopeKey);
+
+    const unarchivedTask = normalizeTask({
+      ...task,
+      archived: false,
+      archivedAt: '',
+    });
+
+    const nextSourceBoard = normalizeBoard({
+      ...sourceBoard,
+      tasks: sourceBoard.tasks.filter((t) => t.id !== taskId),
+    }, boardKey);
+
+    const nextCurrentBoard = normalizeBoard({
+      ...currentBoard,
+      tasks: [...currentBoard.tasks, unarchivedTask],
+      selectedTaskId: unarchivedTask.id,
+    }, currentScopeKey);
+
+    const updatedBoards = {
+      ...boards,
+      [boardKey]: nextSourceBoard,
+      [currentScopeKey]: nextCurrentBoard,
+    };
+    await storage.set({ [STORAGE_KEY]: updatedBoards });
+    return nextCurrentBoard;
+  }
+
+  async function deleteArchivedTaskPermanent(storage, boardKey, taskId) {
+    const boards = await getBoards(storage);
+    const board = boards[boardKey];
+    if (!board || !Array.isArray(board.tasks)) return null;
+
+    const nextBoard = deleteTask(board, taskId);
+    await saveBoard(storage, nextBoard, boards);
+    return nextBoard;
+  }
+
+  function renderArchiveList(archivedTasks = [], options = {}) {
+    const query = typeof options.query === 'string' ? options.query.trim() : '';
+    const quadrantConfig = normalizeQuadrantConfig(options.quadrantConfig);
+
+    if (!archivedTasks.length) {
+      if (query) {
+        return `<div class="dialog-empty">未找到匹配“${escapeHtml(query)}”的归档任务</div>`;
+      }
+      return `<div class="dialog-empty">暂无归档任务。<br><span style="font-size:12px;opacity:0.75;margin-top:6px;display:inline-block;">在 GTD 中点击任务的 × 即可将任务归档到此处。</span></div>`;
+    }
+
+    return archivedTasks.map((task) => {
+      const quadrantTitle = quadrantConfig[task.quadrant] || DEFAULT_QUADRANT_TITLES[task.quadrant] || '象限任务';
+      const scopeLabel = formatScopeDate(task.boardKey || task.boardDate);
+      const timeLabel = formatArchiveTime(task.archivedAt || task.createdAt);
+      const checklist = Array.isArray(task.checklist) ? task.checklist : [];
+      const completedSteps = checklist.filter((item) => item.completed).length;
+
+      let stepsHtml = '';
+      if (checklist.length > 0) {
+        stepsHtml = `
+          <details class="gtd-archive-steps-details">
+            <summary class="gtd-archive-steps-summary">
+              ${checklist.length} 个子步骤 (${completedSteps}/${checklist.length} 完成)
+            </summary>
+            <ul class="gtd-archive-steps-sublist">
+              ${checklist.map((step) => `
+                <li class="gtd-archive-step-item${step.completed ? ' is-completed' : ''}" style="margin-left: ${step.level * 14}px">
+                  <span class="gtd-archive-step-checkbox">${step.completed ? '✓' : '○'}</span>
+                  <span class="gtd-archive-step-text">${escapeHtml(step.text)}</span>
+                </li>
+              `).join('')}
+            </ul>
+          </details>
+        `;
+      }
+
+      return `
+        <div class="gtd-archive-item" data-task-id="${escapeHtml(task.id)}" data-board-key="${escapeHtml(task.boardKey || task.boardDate || '')}">
+          <div class="gtd-archive-item-meta">
+            <span class="gtd-archive-quadrant-badge is-${escapeHtml(task.quadrant)}">${escapeHtml(quadrantTitle)}</span>
+            ${scopeLabel ? `<span class="gtd-archive-date-badge">${escapeHtml(scopeLabel)}</span>` : ''}
+            ${task.completed ? '<span class="gtd-archive-status-badge is-completed">已完成</span>' : ''}
+            ${timeLabel ? `<span class="gtd-archive-time" title="归档时间">${escapeHtml(timeLabel)}</span>` : ''}
+          </div>
+          <div class="gtd-archive-item-content">
+            <div class="gtd-archive-item-title${task.completed ? ' is-completed' : ''}">${escapeHtml(task.title)}</div>
+            <div class="gtd-archive-item-actions">
+              <button
+                class="gtd-archive-action-btn gtd-archive-restore-btn"
+                type="button"
+                data-gtd-action="restore-archived-task"
+                data-task-id="${escapeHtml(task.id)}"
+                data-board-key="${escapeHtml(task.boardKey || task.boardDate || '')}"
+                title="恢复到看板"
+              >
+                恢复
+              </button>
+              <button
+                class="gtd-archive-action-btn gtd-archive-delete-btn"
+                type="button"
+                data-gtd-action="delete-archived-task-permanent"
+                data-task-id="${escapeHtml(task.id)}"
+                data-board-key="${escapeHtml(task.boardKey || task.boardDate || '')}"
+                title="彻底删除"
+              >
+                删除
+              </button>
+            </div>
+          </div>
+          ${stepsHtml}
+        </div>
+      `;
+    }).join('');
+  }
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -497,6 +1373,36 @@
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }
 
+  const DEFAULT_QUADRANT_SHORT_CHARS = {
+    importantUrgent: '急',
+    importantNotUrgent: '重',
+    urgentNotImportant: '杂',
+    notImportantNotUrgent: '闲',
+  };
+
+  function getQuadrantShortChar(quadrantKey, titleConfig = {}) {
+    const key = isValidQuadrant(quadrantKey) ? quadrantKey : 'importantUrgent';
+    const customTitle = titleConfig[key];
+    if (typeof customTitle === 'string' && customTitle.trim() && customTitle.trim() !== DEFAULT_QUADRANT_TITLES[key]) {
+      return customTitle.trim().charAt(0);
+    }
+    return DEFAULT_QUADRANT_SHORT_CHARS[key] || '重';
+  }
+
+  function renderQuadrantRibbon(quadrantKey, titleConfig = {}) {
+    const key = isValidQuadrant(quadrantKey) ? quadrantKey : 'importantUrgent';
+    const quadTitle = titleConfig[key] || DEFAULT_QUADRANT_TITLES[key] || '任务';
+    const shortChar = getQuadrantShortChar(key, titleConfig);
+    return `
+      <span class="gtd-quadrant-ribbon gtd-quadrant-ribbon-${key}" title="四象限分类：${escapeHtml(quadTitle)}">
+        <span class="gtd-ribbon-text">${escapeHtml(shortChar)}</span>
+      </span>
+    `.trim();
+  }
+
+  // 别名保留以兼容历史调用
+  const renderQuadrantFlag = renderQuadrantRibbon;
+
   function renderQuadrantComposer(quadrant, isActive) {
     if (!isActive) {
       return '<div class="gtd-quadrant-gesture">双击空白处快速添加</div>';
@@ -513,6 +1419,57 @@
     const tasks = getQuadrantTasks(board, quadrant.key);
     const completedCount = tasks.filter((task) => task.completed).length;
     const isComposerActive = options.composerQuadrant === quadrant.key;
+    const isEditingTitle = options.editingQuadrantKey === quadrant.key;
+
+    const titleElement = isEditingTitle ? `
+      <form class="gtd-quadrant-title-edit-form" data-gtd-form="edit-quadrant-title" data-quadrant="${quadrant.key}">
+        <input
+          type="text"
+          name="title"
+          value="${escapeHtml(quadrant.title)}"
+          placeholder="输入象限标题，回车保存"
+          autocomplete="off"
+        >
+      </form>
+    ` : `
+      <div
+        class="gtd-quadrant-title"
+        data-gtd-action="edit-quadrant-title"
+        data-quadrant="${quadrant.key}"
+        title="双击修改标题"
+      >${escapeHtml(quadrant.title)}</div>
+    `;
+
+    const activeTasks = tasks.filter((task) => !task.completed);
+    const completedTasks = sortCompletedDesc(tasks.filter((task) => task.completed));
+    const hasEditingTask = completedTasks.some((t) => t.id === options.editingTaskId);
+    const isExpanded = Boolean(options.expandedCompletedQuadrants?.[quadrant.key]) || hasEditingTask;
+
+    const completedSection = completedTasks.length ? `
+      <div class="gtd-completed-section" data-completed-quadrant="${quadrant.key}">
+        <button
+          class="gtd-completed-toggle"
+          type="button"
+          data-gtd-action="toggle-completed-tasks"
+          data-quadrant="${quadrant.key}"
+          aria-expanded="${isExpanded ? 'true' : 'false'}"
+          title="${isExpanded ? '收起已完成任务' : '展开已完成任务'}"
+        >
+          <span class="gtd-completed-toggle-title">
+            <span class="gtd-completed-toggle-icon">${isExpanded ? '▾' : '▸'}</span>
+            已完成 (${completedTasks.length})
+          </span>
+          <span class="gtd-completed-toggle-hint">${isExpanded ? '收起' : '展开'}</span>
+        </button>
+        <div class="gtd-completed-list${isExpanded ? ' is-expanded' : ' is-collapsed'}">
+          ${completedTasks.map((task) => renderTaskItem(board, task, options)).join('')}
+        </div>
+      </div>
+    ` : '';
+
+    const contentHtml = tasks.length === 0
+      ? `<div class="gtd-quadrant-empty">${quadrant.empty}</div>`
+      : `${activeTasks.map((task) => renderTaskItem(board, task, options)).join('')}${completedSection}`;
 
     return `
       <section
@@ -523,16 +1480,20 @@
         title="双击空白处快速添加任务"
       >
         <div class="gtd-quadrant-header">
-          <div>
-            <div class="gtd-quadrant-title">${quadrant.title}</div>
-            <div class="gtd-quadrant-hint">${quadrant.hint}</div>
+          <div class="gtd-quadrant-header-left">
+            <span
+              class="gtd-quadrant-drag-handle"
+              data-gtd-action="drag-quadrant"
+              data-quadrant="${quadrant.key}"
+              draggable="true"
+              title="拖拽调换四象限位置"
+            >⋮⋮</span>
+            ${titleElement}
           </div>
           <div class="gtd-quadrant-count">${completedCount}/${tasks.length || 0}</div>
         </div>
         <div class="gtd-task-list">
-          ${tasks.length ? tasks.map((task) => renderTaskItem(board, task, options)).join('') : `
-            <div class="gtd-quadrant-empty">${quadrant.empty}</div>
-          `}
+          ${contentHtml}
         </div>
         ${renderQuadrantComposer(quadrant, isComposerActive)}
       </section>
@@ -553,7 +1514,6 @@
           placeholder="直接修改任务，回车保存"
           autocomplete="off"
         >
-        <span class="gtd-task-progress">${progress}</span>
       </form>
     ` : `
       <button
@@ -562,8 +1522,9 @@
         data-gtd-action="select-task"
         data-task-id="${task.id}"
       >
-        <span class="gtd-task-title">${escapeHtml(task.title)}</span>
-        <span class="gtd-task-progress">${progress}</span>
+        <span class="gtd-task-title-wrap">
+          <span class="gtd-task-title">${escapeHtml(task.title)}</span>
+        </span>
       </button>
     `;
 
@@ -575,6 +1536,13 @@
         data-gtd-action="drag-task"
         draggable="${isEditing ? 'false' : 'true'}"
       >
+        <button
+          class="gtd-emoji-btn${task.emoji ? ' has-emoji' : ' is-empty'}"
+          type="button"
+          data-gtd-action="pick-emoji"
+          data-task-id="${task.id}"
+          title="选择表情图标"
+        >${task.emoji || '🙂'}</button>
         <input
           class="gtd-task-checkbox"
           type="checkbox"
@@ -587,8 +1555,9 @@
         <button
           class="gtd-task-delete"
           type="button"
-          aria-label="删除任务"
-          data-gtd-action="delete-task"
+          aria-label="归档任务"
+          title="归档任务"
+          data-gtd-action="archive-task"
           data-task-id="${task.id}"
         >
           ×
@@ -630,6 +1599,104 @@
     `;
   }
 
+  // 渲染批量添加步骤面板：多行文本按折行拆分为多个步骤
+  function renderBatchStepPanel(task, options = {}) {
+    if (options.batchStepTaskId !== task.id) return '';
+
+    return `
+      <form class="gtd-step-batch" data-gtd-form="add-batch-steps" data-task-id="${task.id}">
+        <textarea
+          class="gtd-step-batch-textarea"
+          name="batchText"
+          rows="6"
+          placeholder="每行一个步骤，例如：&#10;收集相关素材&#10;整理内容提纲&#10;完成初稿撰写"
+        ></textarea>
+        <div class="gtd-step-batch-hint">按折行拆分，每行生成一个步骤，空行会被忽略；Cmd/Ctrl + Enter 快速添加</div>
+        <div class="gtd-step-batch-actions">
+          <button class="gtd-step-batch-cancel" type="button" data-gtd-action="close-batch-steps">取消</button>
+          <button class="gtd-step-batch-submit" type="submit">确认添加</button>
+        </div>
+      </form>
+    `;
+  }
+
+  function renderStepItem(selectedTask, item, options = {}, meta = {}) {
+    const isEditingStep = options.editingStepId === item.id;
+    const hasChildren = Boolean(meta.hasChildren);
+    const isExpanded = Boolean(meta.isExpanded);
+    const isVisible = meta.isVisible !== false;
+
+    const toggleBtn = hasChildren ? `
+      <button
+        class="gtd-step-toggle-btn"
+        type="button"
+        data-gtd-action="toggle-step-collapse"
+        data-task-id="${selectedTask.id}"
+        data-step-id="${item.id}"
+        aria-expanded="${isExpanded ? 'true' : 'false'}"
+        title="${isExpanded ? '收起子步骤' : `展开子步骤 (${meta.childCount})`}"
+      >
+        <span class="gtd-step-toggle-icon">${isExpanded ? '▾' : '▸'}</span>
+      </button>
+    ` : `<span class="gtd-step-toggle-placeholder"></span>`;
+
+    const stepBody = isEditingStep ? `
+      <form class="gtd-step-edit-form" data-gtd-form="edit-step" data-task-id="${selectedTask.id}" data-step-id="${item.id}">
+        <input
+          type="text"
+          name="text"
+          value="${escapeHtml(item.text)}"
+          placeholder="直接修改步骤，回车保存"
+          autocomplete="off"
+        >
+      </form>
+    ` : `
+      <div class="gtd-step-text">${escapeHtml(item.text)}</div>
+    `;
+
+    return `
+      <div
+        class="gtd-step-item${item.completed ? ' is-completed' : ''}${isEditingStep ? ' is-editing' : ''}${isVisible ? '' : ' is-step-collapsed'}"
+        data-step-id="${item.id}"
+        data-step-level="${item.level}"
+        data-task-id="${selectedTask.id}"
+        data-gtd-action="drag-step"
+        draggable="${isEditingStep ? 'false' : 'true'}"
+        style="${isVisible ? '' : 'display: none; '}--gtd-step-level:${item.level}"
+      >
+        ${toggleBtn}
+        <button
+          class="gtd-emoji-btn${item.emoji ? ' has-emoji' : ' is-empty'}"
+          type="button"
+          data-gtd-action="pick-emoji"
+          data-task-id="${selectedTask.id}"
+          data-step-id="${item.id}"
+          title="选择表情图标"
+        >${item.emoji || '🙂'}</button>
+        <input
+          class="gtd-step-checkbox"
+          type="checkbox"
+          aria-label="完成步骤"
+          data-gtd-action="toggle-step"
+          data-task-id="${selectedTask.id}"
+          data-step-id="${item.id}"
+          ${item.completed ? 'checked' : ''}
+        >
+        ${stepBody}
+        <button
+          class="gtd-step-delete"
+          type="button"
+          aria-label="删除步骤"
+          data-gtd-action="delete-step"
+          data-task-id="${selectedTask.id}"
+          data-step-id="${item.id}"
+        >
+          ×
+        </button>
+      </div>
+    `;
+  }
+
   function renderChecklistPanel(board, options = {}) {
     const selectedTask = getSelectedTask(board);
 
@@ -647,12 +1714,62 @@
     const progress = getTaskProgress(selectedTask);
     const pomodoro = options.pomodoro || {};
     const hasItems = selectedTask.checklist.length > 0;
+    const titleConfig = normalizeQuadrantConfig(options.quadrantConfig);
+
+    const activeSteps = selectedTask.checklist.filter((item) => !item.completed);
+    const completedSteps = sortCompletedDesc(selectedTask.checklist.filter((item) => item.completed));
+    const hasEditingStep = completedSteps.some((s) => s.id === options.editingStepId);
+    const isExpanded = Boolean(options.expandedCompletedSteps?.[selectedTask.id]) || hasEditingStep;
+
+    const activeStepMeta = computeStepTreeVisibility(activeSteps, options.expandedChecklistSteps, options);
+    const completedStepMeta = completedSteps.map(() => ({
+      hasChildren: false,
+      childCount: 0,
+      isExpanded: false,
+      isVisible: true,
+    }));
+
+    const completedSection = completedSteps.length ? `
+      <div class="gtd-completed-section gtd-step-completed-section" data-completed-task="${selectedTask.id}">
+        <button
+          class="gtd-completed-toggle"
+          type="button"
+          data-gtd-action="toggle-completed-steps"
+          data-task-id="${selectedTask.id}"
+          aria-expanded="${isExpanded ? 'true' : 'false'}"
+          title="${isExpanded ? '收起已完成步骤' : '展开已完成步骤'}"
+        >
+          <span class="gtd-completed-toggle-title">
+            <span class="gtd-completed-toggle-icon">${isExpanded ? '▾' : '▸'}</span>
+            已完成步骤 (${completedSteps.length})
+          </span>
+          <span class="gtd-completed-toggle-hint">${isExpanded ? '收起' : '展开'}</span>
+        </button>
+        <div class="gtd-completed-list gtd-completed-steps-list${isExpanded ? ' is-expanded' : ' is-collapsed'}">
+          ${completedSteps.map((item, index) => renderStepItem(selectedTask, item, options, completedStepMeta[index])).join('')}
+        </div>
+      </div>
+    ` : '';
+
+    const stepsContentHtml = selectedTask.checklist.length === 0
+      ? `<div class="gtd-step-empty">还没有拆解步骤。先加第一步，让任务开始滚动起来。</div>`
+      : `${activeSteps.map((item, index) => renderStepItem(selectedTask, item, options, activeStepMeta[index])).join('')}${completedSection}`;
 
     return `
       <div class="gtd-detail-card">
         <div class="gtd-detail-title-block">
           <div class="gtd-detail-title-row">
-            <h3>${escapeHtml(selectedTask.title)}</h3>
+            <div class="gtd-detail-title-wrapper">
+              <button
+                class="gtd-emoji-btn${selectedTask.emoji ? ' has-emoji' : ' is-empty'}"
+                type="button"
+                data-gtd-action="pick-emoji"
+                data-task-id="${selectedTask.id}"
+                title="选择表情图标"
+              >${selectedTask.emoji || '🙂'}</button>
+              <h3>${escapeHtml(selectedTask.title)}</h3>
+              ${renderQuadrantRibbon(selectedTask.quadrant, titleConfig)}
+            </div>
             ${hasItems ? `<button class="gtd-detail-save-checklist" type="button" data-gtd-action="save-checklist" data-task-id="${selectedTask.id}" title="保存 checklist 以便复用">保存 checklist</button>` : ''}
           </div>
           ${renderPomodoroTrack(selectedTask, pomodoro)}
@@ -665,76 +1782,30 @@
           <input type="text" name="text" placeholder="添加一个执行步骤..." autocomplete="off">
           <button type="submit">添加</button>
           <button class="gtd-step-reuse-btn" type="button" data-gtd-action="open-reuse-checklist" data-task-id="${selectedTask.id}" title="从已保存的 checklist 中导入">复用</button>
+          <button class="gtd-step-reuse-btn${options.batchStepTaskId === selectedTask.id ? ' is-active' : ''}" type="button" data-gtd-action="toggle-batch-steps" data-task-id="${selectedTask.id}" title="按折行批量添加步骤">批量</button>
         </form>
+        ${renderBatchStepPanel(selectedTask, options)}
         <div class="gtd-step-list">
-          ${selectedTask.checklist.length ? selectedTask.checklist.map((item) => {
-            const isEditingStep = options.editingStepId === item.id;
-            const stepBody = isEditingStep ? `
-              <form class="gtd-step-edit-form" data-gtd-form="edit-step" data-task-id="${selectedTask.id}" data-step-id="${item.id}">
-                <input
-                  type="text"
-                  name="text"
-                  value="${escapeHtml(item.text)}"
-                  placeholder="直接修改步骤，回车保存"
-                  autocomplete="off"
-                >
-              </form>
-            ` : `
-              <div class="gtd-step-text">${escapeHtml(item.text)}</div>
-            `;
-
-            return `
-            <div
-              class="gtd-step-item${item.completed ? ' is-completed' : ''}${isEditingStep ? ' is-editing' : ''}"
-              data-step-id="${item.id}"
-              data-step-level="${item.level}"
-              data-task-id="${selectedTask.id}"
-              data-gtd-action="drag-step"
-              draggable="${isEditingStep ? 'false' : 'true'}"
-              style="--gtd-step-level:${item.level}"
-            >
-              <input
-                class="gtd-step-checkbox"
-                type="checkbox"
-                aria-label="完成步骤"
-                data-gtd-action="toggle-step"
-                data-task-id="${selectedTask.id}"
-                data-step-id="${item.id}"
-                ${item.completed ? 'checked' : ''}
-              >
-              ${stepBody}
-              <button
-                class="gtd-step-delete"
-                type="button"
-                aria-label="删除步骤"
-                data-gtd-action="delete-step"
-                data-task-id="${selectedTask.id}"
-                data-step-id="${item.id}"
-              >
-                ×
-              </button>
-            </div>
-          `;
-          }).join('') : `
-            <div class="gtd-step-empty">还没有拆解步骤。先加第一步，让任务开始滚动起来。</div>
-          `}
+          ${stepsContentHtml}
         </div>
       </div>
     `;
   }
 
-  function exportBoardToMarkdown(board) {
+  function exportBoardToMarkdown(board, quadrantConfig) {
     const normalized = normalizeBoard(board);
-    const completedTasks = normalized.tasks.filter((task) => task.completed).length;
+    const visibleTasks = normalized.tasks.filter((task) => !task.archived);
+    const completedTasks = visibleTasks.filter((task) => task.completed).length;
+    const quadrants = getQuadrants(quadrantConfig);
     const lines = [
       '# 今日 GTD 日报',
       '',
       `日期：${normalized.date}`,
-      `完成概览：${completedTasks}/${normalized.tasks.length} 任务完成`,
+      `完成概览：${completedTasks}/${visibleTasks.length} 任务完成`,
       '',
     ];
 
-    for (const quadrant of QUADRANTS) {
+    for (const quadrant of quadrants) {
       const tasks = getQuadrantTasks(normalized, quadrant.key);
       lines.push(`## ${quadrant.title}`);
       lines.push('');
@@ -773,13 +1844,21 @@
     let currentTask = null;
     let sawQuadrant = false;
 
+    const titleMap = { ...QUADRANT_TITLE_MAP };
+    if (options.quadrantConfig) {
+      const customConfig = normalizeQuadrantConfig(options.quadrantConfig);
+      Object.entries(customConfig).forEach(([key, title]) => {
+        if (title) titleMap[title] = key;
+      });
+    }
+
     for (const rawLine of text.split('\n')) {
       const line = rawLine.trim();
       if (!line) continue;
 
       const quadrantMatch = line.match(/^##\s+(.+)$/);
       if (quadrantMatch) {
-        currentQuadrant = QUADRANT_TITLE_MAP[quadrantMatch[1].trim()] || '';
+        currentQuadrant = titleMap[quadrantMatch[1].trim()] || '';
         currentTask = null;
         sawQuadrant = sawQuadrant || Boolean(currentQuadrant);
         continue;
@@ -857,16 +1936,251 @@
     `;
   }
 
+  // 渲染四象限与 checklist 之间的分隔条：中间按钮折叠/展开，其余区域可拖拽调宽
+  function renderGtdPanelDivider(options = {}) {
+    const collapsed = Boolean(options.detailCollapsed);
+    const label = collapsed ? '展开 checklist 面板' : '折叠 checklist 面板';
+
+    return `
+      <div class="gtd-panel-divider${collapsed ? ' is-collapsed' : ''}">
+        <button
+          class="gtd-divider-toggle"
+          type="button"
+          data-gtd-action="toggle-gtd-detail"
+          aria-label="${label}"
+          title="${label}"
+        >${collapsed ? '«' : '»'}</button>
+      </div>
+    `;
+  }
+
+  // 渲染主行：四象限 + 分隔条 + checklist 面板，支持折叠与自定义宽度
+  function renderGtdMainRow(board, quadrants, options = {}) {
+    const collapsed = Boolean(options.detailCollapsed);
+    const width = Number(options.detailWidth);
+    const widthStyle = Number.isFinite(width) && width > 0
+      ? ` style="--gtd-detail-width:${Math.round(width)}px"`
+      : '';
+
+    return `
+      <div class="gtd-main-row${collapsed ? ' is-detail-collapsed' : ''}">
+        <section class="gtd-board-panel">
+          <div class="gtd-quad-grid">
+            ${quadrants.map((quadrant) => renderQuadrantCard(board, quadrant, options)).join('')}
+          </div>
+        </section>
+        ${renderGtdPanelDivider(options)}
+        <section class="gtd-detail-panel${Number.isFinite(width) && width > 0 ? ' has-custom-width' : ''}"${widthStyle}>
+          ${renderChecklistPanel(board, options)}
+        </section>
+      </div>
+    `;
+  }
+
+  function renderKanbanBoard(board, options = {}) {
+    const normalized = normalizeBoard(board);
+    const visibleTasks = normalized.tasks.filter((task) => !task.archived);
+    const quadrantConfig = options.quadrantConfig;
+    const titleConfig = normalizeQuadrantConfig(quadrantConfig);
+
+    return `
+      <div class="gtd-kanban-board">
+        ${KANBAN_LANES.map((lane) => {
+          let laneItemCount = 0;
+          const groupHtmls = [];
+
+          let laneTasks = visibleTasks;
+          if (lane.key === 'done') {
+            laneTasks = [...visibleTasks].sort((a, b) => {
+              const timeA = Math.max(
+                a.status === 'done' ? getCompletedTimeValue(a) : 0,
+                ...a.checklist.filter((s) => s.status === 'done').map(getCompletedTimeValue),
+                0
+              );
+              const timeB = Math.max(
+                b.status === 'done' ? getCompletedTimeValue(b) : 0,
+                ...b.checklist.filter((s) => s.status === 'done').map(getCompletedTimeValue),
+                0
+              );
+              return timeB - timeA;
+            });
+          }
+
+          for (const task of laneTasks) {
+            const isTaskInLane = task.status === lane.key;
+            let laneSteps = task.checklist.filter((item) => item.status === lane.key);
+            if (lane.key === 'done') {
+              laneSteps = sortCompletedDesc(laneSteps);
+            }
+
+            if (isTaskInLane) laneItemCount += 1;
+            laneItemCount += laneSteps.length;
+
+            if (isTaskInLane || laneSteps.length > 0) {
+              const quadTitle = titleConfig[task.quadrant] || DEFAULT_QUADRANT_TITLES[task.quadrant] || '任务';
+              const taskKey = `${lane.key}:${task.id}`;
+              const isTaskExpanded = Boolean(options.expandedKanbanTasks?.[taskKey] || options.expandedKanbanTasks?.[task.id]);
+              const laneStepMeta = lane.key === 'done'
+                ? laneSteps.map(() => ({ isVisible: true, hasChildren: false, isExpanded: false }))
+                : computeStepTreeVisibility(laneSteps, options.expandedChecklistSteps, options);
+
+              groupHtmls.push(`
+                <div class="gtd-kanban-group" data-task-id="${task.id}">
+                  <div class="gtd-kanban-group-header${isTaskInLane ? ' is-task-in-lane' : ' is-task-anchor'}">
+                    <div class="gtd-kanban-task-header-row">
+                      <button
+                        class="gtd-emoji-btn${task.emoji ? ' has-emoji' : ' is-empty'}"
+                        type="button"
+                        data-gtd-action="pick-emoji"
+                        data-task-id="${task.id}"
+                        title="设置任务表情"
+                      >${task.emoji || '🙂'}</button>
+                      ${isTaskInLane ? `
+                        <div
+                          class="gtd-kanban-task-card"
+                          data-gtd-action="drag-kanban-item"
+                          data-task-id="${task.id}"
+                          draggable="true"
+                        >
+                          <input
+                            class="gtd-task-checkbox"
+                            type="checkbox"
+                            aria-label="完成任务"
+                            data-gtd-action="toggle-task"
+                            data-task-id="${task.id}"
+                            ${task.completed ? 'checked' : ''}
+                          >
+                          <span class="gtd-kanban-task-title">${escapeHtml(task.title)}</span>
+                          ${renderQuadrantRibbon(task.quadrant, titleConfig)}
+                        </div>
+                      ` : `
+                        <div
+                          class="gtd-kanban-anchor-title"
+                          data-gtd-action="drag-kanban-item"
+                          data-task-id="${task.id}"
+                          draggable="true"
+                          title="所属任务：${escapeHtml(task.title)}（拖拽可移动任务及子步骤）"
+                        >
+                          <span class="gtd-kanban-anchor-label">所属任务:</span>
+                          <span class="gtd-kanban-anchor-text">${escapeHtml(task.title)}</span>
+                          ${renderQuadrantRibbon(task.quadrant, titleConfig)}
+                        </div>
+                      `}
+                      ${laneSteps.length > 0 ? `
+                        <button
+                          class="gtd-kanban-toggle-btn"
+                          type="button"
+                          data-gtd-action="toggle-kanban-task-collapse"
+                          data-task-id="${task.id}"
+                          data-lane="${lane.key}"
+                          aria-expanded="${isTaskExpanded ? 'true' : 'false'}"
+                          title="${isTaskExpanded ? '收起步骤' : `展开步骤 (${laneSteps.length})`}"
+                        >
+                          <span class="gtd-kanban-toggle-icon">${isTaskExpanded ? '▾' : '▸'}</span>
+                          <span class="gtd-kanban-toggle-count">${laneSteps.length}</span>
+                        </button>
+                      ` : ''}
+                    </div>
+                  </div>
+                  ${laneSteps.length > 0 ? `
+                    <div class="gtd-kanban-group-steps${isTaskExpanded ? ' is-expanded' : ' is-collapsed'}"${isTaskExpanded ? '' : ' style="display: none;"'}>
+                      ${laneSteps.map((step, sIdx) => {
+                        const meta = laneStepMeta[sIdx] || { isVisible: true, hasChildren: false, isExpanded: false };
+                        const isGrandchild = step.level >= 1;
+                        const isStepVisible = meta.isVisible !== false;
+                        const hasStepChildren = Boolean(meta.hasChildren);
+                        const isStepExpanded = Boolean(meta.isExpanded);
+
+                        return `
+                          <div
+                            class="gtd-kanban-step-card${step.completed ? ' is-completed' : ''}${isGrandchild ? ' is-grandchild' : ' is-child'}${isStepVisible ? '' : ' is-step-collapsed'}"
+                            data-gtd-action="drag-kanban-item"
+                            data-task-id="${task.id}"
+                            data-step-id="${step.id}"
+                            data-step-level="${step.level}"
+                            draggable="true"
+                            style="${isStepVisible ? '' : 'display: none; '}--kanban-step-level:${step.level}"
+                          >
+                            ${hasStepChildren ? `
+                              <button
+                                class="gtd-step-toggle-btn"
+                                type="button"
+                                data-gtd-action="toggle-step-collapse"
+                                data-task-id="${task.id}"
+                                data-step-id="${step.id}"
+                                aria-expanded="${isStepExpanded ? 'true' : 'false'}"
+                                title="${isStepExpanded ? '收起子步骤' : `展开子步骤 (${meta.childCount})`}"
+                              >
+                                <span class="gtd-step-toggle-icon">${isStepExpanded ? '▾' : '▸'}</span>
+                              </button>
+                            ` : `
+                              <span class="gtd-step-toggle-placeholder"></span>
+                            `}
+                            <button
+                              class="gtd-emoji-btn${step.emoji ? ' has-emoji' : ' is-empty'}"
+                              type="button"
+                              data-gtd-action="pick-emoji"
+                              data-task-id="${task.id}"
+                              data-step-id="${step.id}"
+                              title="设置步骤表情"
+                            >${step.emoji || '🙂'}</button>
+                            <input
+                              class="gtd-step-checkbox"
+                              type="checkbox"
+                              aria-label="完成步骤"
+                              data-gtd-action="toggle-step"
+                              data-task-id="${task.id}"
+                              data-step-id="${step.id}"
+                              ${step.completed ? 'checked' : ''}
+                            >
+                            <span class="gtd-kanban-step-text">${escapeHtml(step.text)}</span>
+                          </div>
+                        `;
+                      }).join('')}
+                    </div>
+                  ` : ''}
+                </div>
+              `);
+            }
+          }
+
+          const bodyContent = groupHtmls.length > 0
+            ? groupHtmls.join('')
+            : `<div class="gtd-kanban-lane-empty">${lane.empty}</div>`;
+
+          return `
+            <section class="gtd-kanban-lane gtd-kanban-lane-${lane.tone}" data-gtd-drop-lane="${lane.key}">
+              <div class="gtd-kanban-lane-header">
+                <div class="gtd-kanban-lane-title">
+                  <span class="gtd-kanban-lane-dot"></span>
+                  <span>${lane.title}</span>
+                </div>
+                <span class="gtd-kanban-lane-count">${laneItemCount}</span>
+              </div>
+              <div class="gtd-kanban-lane-body">
+                ${bodyContent}
+              </div>
+            </section>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
   function renderWorkspace(board, options = {}) {
     const normalized = normalizeBoard(board);
-    const totalTasks = normalized.tasks.length;
-    const completedTasks = normalized.tasks.filter((task) => task.completed).length;
+    const visibleTasks = normalized.tasks.filter((task) => !task.archived);
+    const totalTasks = visibleTasks.length;
+    const completedTasks = visibleTasks.filter((task) => task.completed).length;
     const collapsed = Boolean(options.collapsed);
     const activeScope = options.activeScope || 'day';
     const scopeLabel = options.scopeLabel || '今日 GTD';
+    const quadrants = getQuadrants(options.quadrantConfig);
+    const viewMode = options.viewMode === 'kanban' ? 'kanban' : 'quadrant';
 
     return `
-      <div class="gtd-shell gtd-shell-${activeScope}">
+      <div class="gtd-shell gtd-shell-${activeScope} gtd-view-${viewMode}">
+        ${renderQuickLinksBar(options.quickLinks, options)}
         <div
           class="section-header gtd-section-header is-collapsible${collapsed ? ' is-collapsed' : ''}"
           data-gtd-action="toggle-gtd-section"
@@ -880,22 +2194,39 @@
             <div class="section-count">${completedTasks}/${totalTasks} 已完成</div>
             <div class="gtd-header-buttons">
               ${renderScopeTabbar(activeScope)}
+              <div class="gtd-view-switcher" role="group" aria-label="GTD 视图模式">
+                <button
+                  class="gtd-view-btn${viewMode === 'quadrant' ? ' is-active' : ''}"
+                  type="button"
+                  data-gtd-action="switch-gtd-view"
+                  data-view="quadrant"
+                  title="切换到四象限视图"
+                >四象限</button>
+                <button
+                  class="gtd-view-btn${viewMode === 'kanban' ? ' is-active' : ''}"
+                  type="button"
+                  data-gtd-action="switch-gtd-view"
+                  data-view="kanban"
+                  title="切换到看板模式"
+                >看板</button>
+              </div>
+              ${activeScope === 'day' ? `
+                <input
+                  class="gtd-file-input"
+                  type="file"
+                  accept=".md,.markdown,text/markdown,text/plain"
+                  data-gtd-action="import-gtd-file"
+                  hidden
+                >
+                <button class="gtd-header-btn" type="button" data-gtd-action="import-gtd-report">导入日报</button>
+                <button class="gtd-header-btn" type="button" data-gtd-action="export-gtd-report">导出日报</button>
+              ` : ''}
+              <button class="gtd-header-btn" type="button" data-gtd-action="open-gtd-archive">检索归档</button>
               <button class="gtd-header-btn gtd-header-btn-danger" type="button" data-gtd-action="clear-gtd-board">清空</button>
             </div>
           </div>
         </div>
-        ${collapsed ? '' : `
-        <div class="gtd-main-row">
-          <section class="gtd-board-panel">
-            <div class="gtd-quad-grid">
-              ${QUADRANTS.map((quadrant) => renderQuadrantCard(normalized, quadrant, options)).join('')}
-            </div>
-          </section>
-          <section class="gtd-detail-panel">
-            ${renderChecklistPanel(normalized, options)}
-          </section>
-        </div>
-        `}
+        ${collapsed ? '' : (viewMode === 'kanban' ? renderKanbanBoard(normalized, options) : renderGtdMainRow(normalized, quadrants, options))}
       </div>
     `;
   }
@@ -1015,16 +2346,43 @@
     STORAGE_KEY,
     QUADRANTS,
     QUADRANT_MAP,
+    QUADRANT_CONFIG_KEY,
+    DEFAULT_QUADRANT_TITLES,
+    DEFAULT_QUADRANT_ORDER,
+    normalizeQuadrantOrder,
+    swapQuadrantOrder,
+    normalizeQuadrantConfig,
+    getQuadrantConfig,
+    saveQuadrantConfig,
+    getQuadrants,
+    KANBAN_LANES,
+    KANBAN_LANE_MAP,
+    VALID_KANBAN_STATUSES,
+    normalizeKanbanStatus,
+    updateTaskKanbanStatus,
+    updateChecklistItemKanbanStatus,
+    updateTaskEmoji,
+    updateChecklistItemEmoji,
     getBoardDate,
     createEmptyBoard,
     normalizeBoard,
     addTask,
     selectTask,
     toggleTaskCompleted,
+    archiveTask,
+    restoreTask,
     deleteTask,
+    getArchivedTasks,
+    restoreArchivedTask,
+    deleteArchivedTaskPermanent,
+    renderArchiveList,
+    formatScopeDate,
+    formatArchiveTime,
     updateTaskTitle,
     moveTaskToQuadrant,
     addChecklistItem,
+    addChecklistItems,
+    splitBatchStepLines,
     updateChecklistItemText,
     moveChecklistItem,
     toggleChecklistItemCompleted,
@@ -1042,8 +2400,29 @@
     getSavedChecklists,
     saveSavedChecklist,
     deleteSavedChecklist,
+    QUICK_LINKS_KEY,
+    DEFAULT_QUICK_LINKS_PARTITION_ID,
+    DEFAULT_QUICK_LINKS_PARTITION_NAME,
+    normalizeQuickLinksState,
+    getQuickLinks,
+    saveQuickLinks,
+    addQuickLink,
+    removeQuickLink,
+    moveQuickLink,
+    addQuickLinksPartition,
+    removeQuickLinksPartition,
+    renameQuickLinksPartition,
+    renderQuickLinksBar,
     exportBoardToMarkdown,
     importBoardFromMarkdown,
+    computeStepTreeVisibility,
+    DEFAULT_QUADRANT_SHORT_CHARS,
+    getQuadrantShortChar,
+    renderQuadrantRibbon,
+    renderQuadrantFlag,
+    getCompletedTimeValue,
+    sortCompletedDesc,
+    renderKanbanBoard,
     renderWorkspace,
     renderWorkspaceShell,
   };

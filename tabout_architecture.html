@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TabOut 生产力新标签页工作台特性与功能架构图</title>
+  <style>
+    :root {
+      --primary-blue: #1e62ec;
+      --success-green: #10b981;
+      --accent-amber: #f59e0b;
+      --bg-gray: #f8fafc;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --card-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-family);
+      background-color: var(--bg-gray);
+      color: var(--text-main);
+      padding: 40px 20px 60px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      line-height: 1.5;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--primary-blue);
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .architecture-container {
+      width: 100%;
+      max-width: 1200px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 24px;
+      padding: 40px;
+      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.04);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* 层级行样式 */
+    .row-layer {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      position: relative;
+    }
+
+    .layer-indicator {
+      flex-shrink: 0;
+      width: 160px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .layer-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #ffffff;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .layer-title {
+      font-size: 13px;
+      font-weight: 750;
+      color: #1e293b;
+    }
+
+    /* 主卡片容器 */
+    .layer-content-wrapper {
+      flex: 1;
+      border: 1px dashed #cbd5e1;
+      border-radius: 16px;
+      padding: 16px 20px;
+      background-color: #f8fafc;
+      min-height: 88px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: relative;
+    }
+
+    /* 第一层色彩 */
+    .layer-1 .layer-badge { background-color: #6366f1; }
+    .layer-1 .layer-content-wrapper { border-color: rgba(99, 102, 241, 0.4); background-color: rgba(99, 102, 241, 0.02); }
+    /* 第二层色彩 */
+    .layer-2 .layer-badge { background-color: #f59e0b; }
+    .layer-2 .layer-content-wrapper { border-color: rgba(245, 158, 11, 0.4); background-color: rgba(245, 158, 11, 0.02); }
+    /* 第三层色彩 */
+    .layer-3 .layer-badge { background-color: #10b981; }
+    .layer-3 .layer-content-wrapper { border-color: rgba(16, 185, 129, 0.4); background-color: rgba(16, 185, 129, 0.02); }
+    /* 第四层色彩 */
+    .layer-4 .layer-badge { background-color: #06b6d4; }
+    .layer-4 .layer-content-wrapper { border-color: rgba(6, 182, 212, 0.4); background-color: rgba(6, 182, 212, 0.02); }
+    /* 第五层色彩 */
+    .layer-5 .layer-badge { background-color: #3b82f6; }
+    .layer-5 .layer-content-wrapper { border-color: rgba(59, 130, 246, 0.4); background-color: rgba(59, 130, 246, 0.02); }
+
+    /* 卡片组 */
+    .cards-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      width: 100%;
+    }
+
+    /* 内部白卡片 */
+    .item-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: var(--card-shadow);
+      min-width: 140px;
+      flex: 1;
+      max-width: calc(25% - 9px);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .item-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+      border-color: #cbd5e1;
+    }
+
+    .item-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .layer-1 .item-icon { background: rgba(99, 102, 241, 0.1); color: #6366f1; }
+    .layer-2 .item-icon { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+    .layer-3 .item-icon { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+    .layer-4 .item-icon { background: rgba(6, 182, 212, 0.1); color: #06b6d4; }
+    .layer-5 .item-icon { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+
+    .item-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .item-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #1e293b;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .item-desc {
+      font-size: 9px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 1px;
+    }
+
+    /* 大层级流向箭头 */
+    .flow-arrow {
+      align-self: center;
+      margin: -6px 0;
+      color: #94a3b8;
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      height: 16px;
+    }
+
+    /* 右侧贯穿线与边栏组件 */
+    .right-sidebar-axis {
+      position: absolute;
+      right: 40px;
+      top: 40px;
+      bottom: 120px;
+      width: 1px;
+      border-left: 2px dashed #94a3b8;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .axis-badge {
+      background-color: var(--primary-blue);
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 6px 10px;
+      border-radius: 999px;
+      white-space: nowrap;
+      transform: rotate(90deg);
+      box-shadow: 0 4px 10px rgba(30, 98, 236, 0.2);
+    }
+
+    /* 底部支撑标签组 */
+    .bottom-support-bar {
+      margin-top: 24px;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 24px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .support-pill {
+      flex: 1;
+      background: #ffffff;
+      border: 1px solid rgba(30, 98, 236, 0.16);
+      border-radius: 999px;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: var(--card-shadow);
+      transition: all 0.2s;
+    }
+
+    .support-pill:hover {
+      border-color: var(--primary-blue);
+      box-shadow: 0 8px 18px rgba(30, 98, 236, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .support-icon {
+      color: var(--primary-blue);
+      flex-shrink: 0;
+    }
+
+    .support-text {
+      font-size: 11px;
+      font-weight: 750;
+      color: #334155;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>TabOut 生产力标签页工作台功能架构图</h1>
+    <p>五维贯通的一体化极致效率引擎，重塑浏览器主屏生产力</p>
+  </div>
+
+  <div class="architecture-container">
+    
+    <!-- 第1层 -->
+    <div class="row-layer layer-1">
+      <div class="layer-indicator">
+        <span class="layer-badge">第 1 层 · 感知层</span>
+        <span class="layer-title">环境感知与人文交互</span>
+      </div>
+      <div class="layer-content-wrapper">
+        <div class="cards-container">
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">新标签页入口</span>
+              <span class="item-desc">秒级极速渲染打开</span>
+            </div>
+          </div>
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a9.83 9.83 0 0 1-5 1.5 10 10 0 0 1-1-15 10 10 0 0 0 6 13.5A9.94 9.94 0 0 1 21 15z"></path></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">48类动态主题</span>
+              <span class="item-desc">Wallhaven双方向搜索</span>
+            </div>
+          </div>
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">人文心灵鸡汤</span>
+              <span class="item-desc">1800+句式 刷新即变</span>
+            </div>
+          </div>
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">自适应陪伴时钟</span>
+              <span class="item-desc">实时时间与日期感应</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-arrow">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+    </div>
+
+    <!-- 第2层 -->
+    <div class="row-layer layer-2">
+      <div class="layer-indicator">
+        <span class="layer-badge">第 2 层 · 事务层</span>
+        <span class="layer-title">个人核心事务看板</span>
+      </div>
+      <div class="layer-content-wrapper">
+        <div class="cards-container">
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">标准四象限GTD</span>
+              <span class="item-desc">重要度/紧急度分流</span>
+            </div>
+          </div>
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="M12 6v6l4 2"></path></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">25分钟番茄专注</span>
+              <span class="item-desc">状态锁定 烟火庆祝</span>
+            </div>
+          </div>
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">6级深度子清单</span>
+              <span class="item-desc">拖动排序 拆解极简</span>
+            </div>
+          </div>
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">跨周期历史承接</span>
+              <span class="item-desc">日/周/月独立保留</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-arrow">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+    </div>
+
+    <!-- 第3层 -->
+    <div class="row-layer layer-3">
+      <div class="layer-indicator">
+        <span class="layer-badge">第 3 层 · 调度层</span>
+        <span class="layer-title">生产力矩阵与调度</span>
+      </div>
+      <div class="layer-content-wrapper">
+        <div class="cards-container">
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">微标签页折叠</span>
+              <span class="item-desc">域名折叠 批量清理</span>
+            </div>
+          </div>
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">Saved for Later</span>
+              <span class="item-desc">标签保存 本地存储</span>
+            </div>
+          </div>
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">微记事 (Memo)</span>
+              <span class="item-desc">多标签碎片想法速记</span>
+            </div>
+          </div>
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">月度速记热力图</span>
+              <span class="item-desc">可视化分析想法足迹</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-arrow">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+    </div>
+
+    <!-- 第4层 -->
+    <div class="row-layer layer-4">
+      <div class="layer-indicator">
+        <span class="layer-badge">第 4 层 · 创意层</span>
+        <span class="layer-title">思考具象与创意工坊</span>
+      </div>
+      <div class="layer-content-wrapper">
+        <div class="cards-container">
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">微白板 (Excalidraw)</span>
+              <span class="item-desc">无限画布 新建/精简导入</span>
+            </div>
+          </div>
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">微笔记 (Tiptap)</span>
+              <span class="item-desc">自动大纲 生成MD文本</span>
+            </div>
+          </div>
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">结构图 (draw.io)</span>
+              <span class="item-desc">XML无缝往返 一键新建</span>
+            </div>
+          </div>
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.2 15c.9-1.5 1-3.3.4-4.8-.7-1.8-2.5-3-4.6-3H15c-.4 0-.8-.3-.8-.7a5.2 5.2 0 0 0-10.1-1.3C3.7 5.7 3 6.8 3 8.2c0 2 1.6 3.6 3.6 3.6h11c1.3 0 2.4.8 2.8 2z"></path></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">免后缀轻量化备份</span>
+              <span class="item-desc">彻底清除冗余文件路径</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-arrow">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+    </div>
+
+    <!-- 第5层 -->
+    <div class="row-layer layer-5">
+      <div class="layer-indicator">
+        <span class="layer-badge">第 5 层 · 智能底座</span>
+        <span class="layer-title">智能协同与安全保障</span>
+      </div>
+      <div class="layer-content-wrapper">
+        <div class="cards-container">
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">IndexedDB自动备份</span>
+              <span class="item-desc">静默自动压缩 保留30天</span>
+            </div>
+          </div>
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">AI 对话自动归档</span>
+              <span class="item-desc">内置导出 ai-history.md</span>
+            </div>
+          </div>
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="7.5 4.21 12 6.81 16.5 4.21"></polyline><polyline points="7.5 19.79 7.5 14.6 3 12"></polyline><polyline points="21 12 16.5 14.6 16.5 19.79"></polyline><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">PC 侧边栏 Copilot</span>
+              <span class="item-desc">上下贯通 网页联动推开</span>
+            </div>
+          </div>
+          <div class="item-card">
+            <div class="item-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            </div>
+            <div class="item-info">
+              <span class="item-title">AI 对白 GTD 意图解析</span>
+              <span class="item-desc">一是二是列表100%容错</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧连贯虚线指示线 -->
+    <div class="right-sidebar-axis">
+      <span class="axis-badge">全链路隐私加密与深度联动</span>
+    </div>
+
+    <!-- 底部支撑标签栏 -->
+    <div class="bottom-support-bar">
+      <div class="support-pill">
+        <svg class="support-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <span class="support-text">完全本地隐私保护</span>
+      </div>
+      <div class="support-pill">
+        <svg class="support-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+        <span class="support-text">极致精致微动效</span>
+      </div>
+      <div class="support-pill">
+        <svg class="support-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        <span class="support-text">全链路无缝联动</span>
+      </div>
+      <div class="support-pill">
+        <svg class="support-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+        <span class="support-text">极速秒开零延迟</span>
+      </div>
+      <div class="support-pill">
+        <svg class="support-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L18 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L6 16"></path></svg>
+        <span class="support-text">数据自主备份可控</span>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

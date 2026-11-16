@@ -159,6 +159,7 @@
   const importBtnEl = document.getElementById('structureboardImportBtn');
   const exportBtnEl = document.getElementById('structureboardExportBtn');
   const importInputEl = document.getElementById('structureboardImportInput');
+  const newBtnEl = document.getElementById('structureboardNewBtn');
 
   function syncThemeMarker() {
     document.documentElement.dataset.theme = isDarkMode ? 'dark' : 'light';
@@ -169,6 +170,7 @@
   }
 
   function setBusy(isBusy) {
+    if (newBtnEl) newBtnEl.disabled = isBusy;
     importBtnEl.disabled = isBusy;
     exportBtnEl.disabled = isBusy;
     fullscreenBtnEl.disabled = isBusy;
@@ -310,6 +312,23 @@
   titleInputEl.addEventListener('blur', () => {
     if (!isEditingTitle) return;
     commitTitle(titleInputEl.value);
+  });
+
+  newBtnEl.addEventListener('click', async () => {
+    const confirmed = confirm('确定要新建结构图并丢弃当前内容吗？此操作不可撤销。');
+    if (!confirmed) return;
+
+    setBusy(true);
+    try {
+      currentDocument = structureboardStateApi.createEmptyStructureboardState();
+      renderTitle();
+      await savePersistedDocument(currentDocument);
+      remountEditor();
+    } catch (err) {
+      console.error('[tab-out] Failed to create new structureboard:', err);
+    } finally {
+      setBusy(false);
+    }
   });
 
   fullscreenBtnEl.addEventListener('click', () => {

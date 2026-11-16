@@ -30,85 +30,35 @@ const POMODORO_STORAGE_KEY = 'tab-out-pomodoro';
 const UI_PREFS_STORAGE_KEY = 'tab-out-ui-prefs';
 const POMODORO_DURATION_MS = 25 * 60 * 1000;
 const ENCOURAGEMENT_ROTATION_MS = 20 * 60 * 1000;
-const BACKGROUND_THEME_ROTATION_MS = 12 * 60 * 1000;
-const BACKGROUND_THEME_GROUPS = {
-  epic: [
-    'summit-gold',
-    'glacier-run',
-    'canyon-wind',
-    'aurora-arc',
-  ],
-  sport: [
-    'stadium-flare',
-    'midnight-track',
-    'ocean-sprint',
-    'sunrise-motion',
-  ],
-};
-const BACKGROUND_THEME_DIRECTIONS = ['epic', 'sport'];
-const BACKGROUND_REMOTE_API_URL = 'https://wallhaven.cc/api/v1/search';
-const BACKGROUND_DIRECT_FALLBACK_ROOT = 'https://loremflickr.com/2400/1350';
-const BACKGROUND_REMOTE_FETCH_TIMEOUT_MS = 12000;
-const BACKGROUND_REMOTE_IMAGE_TIMEOUT_MS = 15000;
-const BACKGROUND_RECENT_PHOTO_LIMIT = 18;
-const BACKGROUND_MAX_FILE_SIZE_BYTES = 14 * 1024 * 1024;
-const BACKGROUND_REMOTE_QUERIES = {
-  epic: [
-    { key: 'summit-dawn', label: '山海晨光', query: 'alpine sunrise', categories: '100' },
-    { key: 'glacier-plain', label: '雪峰冰川', query: 'glacier valley', categories: '100' },
-    { key: 'canyon-storm', label: '峡谷长风', query: 'desert canyon', categories: '100' },
-    { key: 'aurora-night', label: '极光夜空', query: 'aurora sky', categories: '100' },
-    { key: 'ocean-force', label: '海面风暴', query: 'storm ocean', categories: '100' },
-    { key: 'forest-ridge', label: '森林山脊', query: 'forest ridge', categories: '100' },
-    { key: 'misty-lake', label: '雾隐平湖', query: 'misty lake mountains', categories: '100' },
-    { key: 'cherry-path', label: '樱吹雪径', query: 'cherry blossom path', categories: '100' },
-    { key: 'autumn-maple', label: '秋枫古道', query: 'autumn maple forest', categories: '100' },
-    { key: 'star-desert', label: '星沙荒漠', query: 'desert night stars', categories: '100' },
-    { key: 'waterfall-green', label: '翠谷飞瀑', query: 'waterfall jungle', categories: '100' },
-    { key: 'lavender-field', label: '薰衣草田', query: 'lavender field sunset', categories: '100' },
-  ],
-  sport: [
-    { key: 'stadium-lights', label: '球场灯火', query: 'stadium lights', categories: '101' },
-    { key: 'track-speed', label: '赛道速度', query: 'running track', categories: '101' },
-    { key: 'cycling-surge', label: '骑行冲刺', query: 'cycling race', categories: '101' },
-    { key: 'surf-energy', label: '冲浪瞬间', query: 'surf action', categories: '101' },
-    { key: 'court-tension', label: '篮场张力', query: 'basketball court', categories: '101' },
-    { key: 'marathon-flow', label: '晨跑动势', query: 'marathon city', categories: '101' },
-    { key: 'snowboard-air', label: '雪板腾空', query: 'snowboard jump', categories: '101' },
-    { key: 'cliff-climb', label: '峭壁攀登', query: 'rock climbing cliff', categories: '100' },
-    { key: 'yoga-dawn', label: '晨光瑜伽', query: 'yoga sunrise beach', categories: '100' },
-    { key: 'tennis-focus', label: '网前专注', query: 'tennis match', categories: '101' },
-    { key: 'swim-ocean', label: '碧波逐浪', query: 'open water swimming', categories: '100' },
-    { key: 'parkour-city', label: '城市飞跃', query: 'parkour city rooftop', categories: '100' },
-  ],
-};
 let activeGtdComposerQuadrant = '';
 let activeGtdEditingTaskId = '';
+let activeGtdEditingQuadrantKey = '';
 let pomodoroState = null;
-let pomodoroTickerId = 0;
-let pomodoroToggleTimerId = 0;
-let backgroundThemeRotationId = 0;
-let currentBackgroundDirection = '';
-let backgroundPhotoLayerIndex = -1;
-let backgroundRequestSequence = 0;
-let recentBackgroundPhotoIds = [];
-let lastBackgroundQueryByDirection = {
-  epic: '',
-  sport: '',
-};
 let encouragementTimeoutId = 0;
 let encouragementIntervalId = 0;
 let gtdTaskSelectionTimerId = 0;
 let gtdCompositionActive = false;
 let activeGtdDraggingTaskId = '';
 let activeGtdStepDragState = null;
+let activeGtdKanbanDragState = null;
 let activeGtdEditingStepId = '';
+let activeGtdBatchStepTaskId = '';
 let pendingGtdRenderOptions = null;
+// checklist 面板拖拽宽度的合法上下限（像素），超出按默认布局处理
+const GTD_DETAIL_MIN_WIDTH = 280;
+const GTD_DETAIL_MAX_WIDTH = 1200;
 let uiPrefs = {
   gtdCollapsed: false,
   workspaceTab: 'gtd',
   activeGtdScope: 'day',
   activeMemoTag: '',
+  gtdDetailCollapsed: false,
+  gtdDetailWidth: 0,
+  expandedCompletedQuadrants: {},
+  expandedCompletedSteps: {},
+  expandedKanbanTasks: {},
+  expandedChecklistSteps: {},
+  gtdViewMode: 'quadrant',
 };
 let optionalConfigLoadPromise = null;
 
@@ -184,6 +134,12 @@ function normalizeWorkspaceTab(value) {
   return value === 'whiteboard' || value === 'notes' || value === 'structure' || value === 'backup' || value === 'memo' ? value : 'gtd';
 }
 
+function normalizeGtdDetailWidth(value) {
+  const width = Math.round(Number(value));
+  if (!Number.isFinite(width) || width < GTD_DETAIL_MIN_WIDTH || width > GTD_DETAIL_MAX_WIDTH) return 0;
+  return width;
+}
+
 function loadUiPrefs() {
   try {
     const raw = localStorage.getItem(UI_PREFS_STORAGE_KEY);
@@ -196,6 +152,13 @@ function loadUiPrefs() {
       gtdCollapsed: Boolean(parsed.gtdCollapsed),
       workspaceTab: 'gtd',
       activeGtdScope: validScopes[parsed.activeGtdScope] ? parsed.activeGtdScope : 'day',
+      gtdDetailCollapsed: Boolean(parsed.gtdDetailCollapsed),
+      gtdDetailWidth: normalizeGtdDetailWidth(parsed.gtdDetailWidth),
+      expandedCompletedQuadrants: parsed.expandedCompletedQuadrants && typeof parsed.expandedCompletedQuadrants === 'object' ? parsed.expandedCompletedQuadrants : {},
+      expandedCompletedSteps: parsed.expandedCompletedSteps && typeof parsed.expandedCompletedSteps === 'object' ? parsed.expandedCompletedSteps : {},
+      expandedKanbanTasks: parsed.expandedKanbanTasks && typeof parsed.expandedKanbanTasks === 'object' ? parsed.expandedKanbanTasks : {},
+      expandedChecklistSteps: parsed.expandedChecklistSteps && typeof parsed.expandedChecklistSteps === 'object' ? parsed.expandedChecklistSteps : {},
+      gtdViewMode: parsed.gtdViewMode === 'kanban' ? 'kanban' : 'quadrant',
     };
   } catch {
     // ignore invalid persisted prefs
@@ -207,325 +170,38 @@ function saveUiPrefs() {
     localStorage.setItem(UI_PREFS_STORAGE_KEY, JSON.stringify({
       gtdCollapsed: uiPrefs.gtdCollapsed,
       activeGtdScope: uiPrefs.activeGtdScope,
+      gtdDetailCollapsed: uiPrefs.gtdDetailCollapsed,
+      gtdDetailWidth: uiPrefs.gtdDetailWidth,
+      expandedCompletedQuadrants: uiPrefs.expandedCompletedQuadrants || {},
+      expandedCompletedSteps: uiPrefs.expandedCompletedSteps || {},
+      expandedKanbanTasks: uiPrefs.expandedKanbanTasks || {},
+      expandedChecklistSteps: uiPrefs.expandedChecklistSteps || {},
+      gtdViewMode: uiPrefs.gtdViewMode || 'quadrant',
     }));
   } catch {
     // ignore local persistence failure
   }
 }
 
-function pickRandomFromPool(items, excludePredicate = null) {
-  if (!Array.isArray(items) || !items.length) return null;
-  const filtered = typeof excludePredicate === 'function' ? items.filter((item) => !excludePredicate(item)) : items;
-  const pool = filtered.length ? filtered : items;
-  return pool[Math.floor(Math.random() * pool.length)] || null;
-}
-
-function getRandomBackgroundThemeFromGroup(direction, currentTheme = '') {
-  const themes = BACKGROUND_THEME_GROUPS[direction] || [];
-  if (!themes.length) return '';
-  if (themes.length === 1) return themes[0];
-  const choice = pickRandomFromPool(themes, (theme) => currentTheme && theme === currentTheme);
-  return choice || themes[0];
-}
-
-function getNextBackgroundDirection(currentDirection = '') {
-  if (!BACKGROUND_THEME_DIRECTIONS.length) return '';
-  if (!currentDirection || !BACKGROUND_THEME_DIRECTIONS.includes(currentDirection)) {
-    return BACKGROUND_THEME_DIRECTIONS[Math.floor(Math.random() * BACKGROUND_THEME_DIRECTIONS.length)];
-  }
-
-  const currentIndex = BACKGROUND_THEME_DIRECTIONS.indexOf(currentDirection);
-  return BACKGROUND_THEME_DIRECTIONS[(currentIndex + 1) % BACKGROUND_THEME_DIRECTIONS.length];
-}
-
-function getNextBackgroundTheme(currentTheme = '', currentDirection = '') {
-  const nextDirection = getNextBackgroundDirection(currentDirection);
-  const nextTheme = getRandomBackgroundThemeFromGroup(nextDirection, currentTheme);
-  return {
-    direction: nextDirection,
-    theme: nextTheme,
-  };
-}
-
-function getBackgroundPhotoLayers() {
-  return Array.from(document.querySelectorAll('[data-background-photo-layer]'));
-}
-
-function getBackgroundCreditElements() {
-  return {
-    root: document.getElementById('backgroundCredit'),
-    label: document.getElementById('backgroundCreditLabel'),
-    link: document.getElementById('backgroundCreditLink'),
-  };
-}
-
-function updateBackgroundCredit(photo) {
-  const { root, label, link } = getBackgroundCreditElements();
-  if (!root || !label || !link) return;
-
-  if (!photo?.pageUrl) {
-    root.hidden = true;
-    label.textContent = '';
-    link.href = '#';
-    root.removeAttribute('title');
-    return;
-  }
-
-  label.textContent = `背景：${photo.label}`;
-  link.href = photo.pageUrl;
-  root.title = [photo.label, photo.resolution].filter(Boolean).join(' · ');
-  root.hidden = false;
-}
-
-function rememberBackgroundPhoto(photoId) {
-  if (!photoId) return;
-  recentBackgroundPhotoIds = [photoId, ...recentBackgroundPhotoIds.filter((id) => id !== photoId)]
-    .slice(0, BACKGROUND_RECENT_PHOTO_LIMIT);
-}
-
-function pickBackgroundQuery(direction) {
-  const queries = BACKGROUND_REMOTE_QUERIES[direction] || [];
-  if (!queries.length) return null;
-  const lastKey = lastBackgroundQueryByDirection[direction] || '';
-  const choice = pickRandomFromPool(queries, (item) => lastKey && item?.key === lastKey) || queries[0];
-  lastBackgroundQueryByDirection = {
-    ...lastBackgroundQueryByDirection,
-    [direction]: choice?.key || '',
-  };
-  return choice;
-}
-
-function buildWallhavenSearchUrl(direction) {
-  const descriptor = pickBackgroundQuery(direction);
-  if (!descriptor) return null;
-
-  const params = new URLSearchParams({
-    q: descriptor.query,
-    categories: descriptor.categories || '100',
-    purity: '100',
-    sorting: 'random',
-    ratios: '16x9,16x10',
-    atleast: '1920x1080',
-  });
-
-  return {
-    descriptor,
-    url: `${BACKGROUND_REMOTE_API_URL}?${params.toString()}`,
-  };
-}
-
-function buildDirectFallbackPhoto(direction) {
-  const descriptor = pickBackgroundQuery(direction);
-  if (!descriptor) return null;
-
-  const keywordPath = descriptor.query
-    .split(/\s+/)
-    .map((part) => encodeURIComponent(part))
-    .join(',');
-  const lock = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-  return {
-    id: `fallback-${direction}-${lock}`,
-    imageUrl: `${BACKGROUND_DIRECT_FALLBACK_ROOT}/${keywordPath}?lock=${lock}`,
-    pageUrl: 'https://loremflickr.com/',
-    direction,
-    label: `${descriptor.label} · 备用图源`,
-    query: descriptor.query,
-    resolution: '2400x1350',
-  };
-}
-
-async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
-  const controller = new AbortController();
-  const timerId = window.setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    return await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
-  } finally {
-    window.clearTimeout(timerId);
-  }
-}
-
-function normalizeWallhavenCandidate(item, options = {}) {
-  const { allowRecent = false } = options;
-  if (!item || typeof item !== 'object') return null;
-  if (!item.path || !item.url || item.purity !== 'sfw') return null;
-  if (item.category === 'anime') return null;
-  const fileSize = Number(item.file_size) || 0;
-  if (fileSize > BACKGROUND_MAX_FILE_SIZE_BYTES) return null;
-  if (!allowRecent && recentBackgroundPhotoIds.includes(item.id)) return null;
-
-  return {
-    id: typeof item.id === 'string' ? item.id : '',
-    imageUrl: item.path,
-    pageUrl: item.url,
-    favorites: Number(item.favorites) || 0,
-    views: Number(item.views) || 0,
-    resolution: item.resolution || '',
-  };
-}
-
-async function fetchRemoteBackground(direction) {
-  const request = buildWallhavenSearchUrl(direction);
-  if (!request?.url) return null;
-
-  const response = await fetchWithTimeout(request.url, {
-    cache: 'no-store',
-    credentials: 'omit',
-  }, BACKGROUND_REMOTE_FETCH_TIMEOUT_MS);
-
-  if (!response.ok) {
-    throw new Error(`background-search-${response.status}`);
-  }
-
-  const payload = await response.json();
-  const rawItems = Array.isArray(payload?.data) ? payload.data : [];
-  const candidates = rawItems.map((item) => normalizeWallhavenCandidate(item)).filter(Boolean);
-  const fallbackCandidates = rawItems
-    .map((item) => normalizeWallhavenCandidate(item, { allowRecent: true }))
-    .filter(Boolean);
-
-  const usableCandidates = candidates.length ? candidates : fallbackCandidates;
-
-  if (!usableCandidates.length) {
-    throw new Error('background-search-empty');
-  }
-
-  const ranked = usableCandidates.sort((left, right) => {
-    if (right.favorites !== left.favorites) return right.favorites - left.favorites;
-    return right.views - left.views;
-  });
-  const shortlist = ranked.slice(0, Math.min(8, ranked.length));
-  const chosen = pickRandomFromPool(shortlist) || ranked[0];
-
-  return {
-    ...chosen,
-    direction,
-    label: request.descriptor.label,
-    query: request.descriptor.query,
-  };
-}
-
-function preloadBackgroundImage(imageUrl) {
-  return new Promise((resolve, reject) => {
-    if (!imageUrl) {
-      reject(new Error('background-image-empty'));
-      return;
-    }
-
-    const image = new Image();
-    const timerId = window.setTimeout(() => {
-      reject(new Error('background-image-timeout'));
-    }, BACKGROUND_REMOTE_IMAGE_TIMEOUT_MS);
-
-    image.onload = () => {
-      window.clearTimeout(timerId);
-      resolve(imageUrl);
-    };
-    image.onerror = () => {
-      window.clearTimeout(timerId);
-      reject(new Error('background-image-error'));
-    };
-    image.decoding = 'async';
-    image.referrerPolicy = 'no-referrer';
-    image.src = imageUrl;
-  });
-}
-
-function buildBackgroundPhotoCss(photo) {
-  const escapedUrl = String(photo?.imageUrl || '').replace(/"/g, '\\"');
-  const directionTint = photo?.direction === 'sport'
-    ? 'linear-gradient(125deg, rgba(7, 14, 28, 0.24), rgba(18, 11, 15, 0.52))'
-    : 'linear-gradient(125deg, rgba(9, 16, 28, 0.2), rgba(21, 15, 12, 0.46))';
-  const depthGlow = 'radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.16), transparent 34%)';
-  return `${directionTint}, ${depthGlow}, url("${escapedUrl}")`;
-}
-
-function applyBackgroundPhoto(photo) {
-  const layers = getBackgroundPhotoLayers();
-  if (!layers.length || !photo?.imageUrl) return;
-
-  const nextIndex = backgroundPhotoLayerIndex < 0
-    ? 0
-    : (backgroundPhotoLayerIndex + 1) % layers.length;
-  const nextLayer = layers[nextIndex];
-
-  nextLayer.style.backgroundImage = buildBackgroundPhotoCss(photo);
-  nextLayer.dataset.direction = photo.direction || '';
-  nextLayer.classList.add('is-active');
-
-  layers.forEach((layer, index) => {
-    if (index === nextIndex) return;
-    layer.classList.remove('is-active');
-  });
-
-  backgroundPhotoLayerIndex = nextIndex;
-  document.body.classList.add('has-background-photo');
-  rememberBackgroundPhoto(photo.id);
-  updateBackgroundCredit(photo);
-}
-
-function clearBackgroundPhoto() {
-  const layers = getBackgroundPhotoLayers();
-  layers.forEach((layer) => {
-    layer.classList.remove('is-active');
-    layer.style.backgroundImage = '';
-    delete layer.dataset.direction;
-  });
-  backgroundPhotoLayerIndex = -1;
-  document.body.classList.remove('has-background-photo');
-  delete document.body.dataset.bgTheme;
-  delete document.body.dataset.bgDirection;
-  updateBackgroundCredit(null);
-}
-
-function applyBackgroundTheme(theme, direction = '') {
-  if (!theme) return;
-  document.body.dataset.bgTheme = theme;
-  if (direction) document.body.dataset.bgDirection = direction;
-}
-
-async function rotateBackgroundScene() {
-  const nextTheme = getNextBackgroundTheme(document.body.dataset.bgTheme || '', currentBackgroundDirection);
-  currentBackgroundDirection = nextTheme.direction;
-
-  const requestSequence = ++backgroundRequestSequence;
-
-  try {
-    const photo = await fetchRemoteBackground(nextTheme.direction);
-    await preloadBackgroundImage(photo.imageUrl);
-    if (requestSequence !== backgroundRequestSequence) return;
-    applyBackgroundTheme(nextTheme.theme, nextTheme.direction);
-    applyBackgroundPhoto(photo);
-  } catch (err) {
-    if (requestSequence !== backgroundRequestSequence) return;
-    try {
-      const fallbackPhoto = buildDirectFallbackPhoto(nextTheme.direction);
-      if (!fallbackPhoto) throw err;
-      await preloadBackgroundImage(fallbackPhoto.imageUrl);
-      if (requestSequence !== backgroundRequestSequence) return;
-      applyBackgroundTheme(nextTheme.theme, nextTheme.direction);
-      applyBackgroundPhoto(fallbackPhoto);
-    } catch (fallbackErr) {
-      if (!document.body.classList.contains('has-background-photo')) {
-        clearBackgroundPhoto();
-      }
-    }
+/* ----------------------------------------------------------------
+   DYNAMIC BACKGROUND — Delegated to TabOutBackgroundManager
+   ---------------------------------------------------------------- */
+function initDynamicBackground() {
+  if (window.TabOutBackgroundManager?.initDynamicBackground) {
+    window.TabOutBackgroundManager.initDynamicBackground();
   }
 }
 
 function clearGtdDragState(root = document.getElementById('gtdWorkspace')) {
   activeGtdDraggingTaskId = '';
   activeGtdStepDragState = null;
+  activeGtdKanbanDragState = null;
   if (!root) return;
 
-  root.querySelectorAll('.gtd-task-item.is-dragging').forEach((item) => {
-    item.classList.remove('is-dragging');
+  root.querySelectorAll('.gtd-task-item.is-dragging, .gtd-kanban-task-card.is-dragging, .gtd-kanban-step-card.is-dragging, .gtd-kanban-anchor-title.is-dragging, .is-kanban-dragging').forEach((item) => {
+    item.classList.remove('is-dragging', 'is-kanban-dragging');
   });
-  root.querySelectorAll('.gtd-quadrant.is-drop-target').forEach((item) => {
+  root.querySelectorAll('.gtd-quadrant.is-drop-target, .gtd-kanban-lane.is-drop-target').forEach((item) => {
     item.classList.remove('is-drop-target');
   });
   root.querySelectorAll('.gtd-step-item.is-dragging, .gtd-step-item.is-drop-before, .gtd-step-item.is-drop-after').forEach((item) => {
@@ -534,6 +210,21 @@ function clearGtdDragState(root = document.getElementById('gtdWorkspace')) {
   root.querySelectorAll('.gtd-step-list.is-drop-end').forEach((item) => {
     item.classList.remove('is-drop-end');
   });
+}
+
+function setGtdKanbanDropTarget(laneKey, root = document.getElementById('gtdWorkspace')) {
+  if (!root) return;
+
+  root.querySelectorAll('.gtd-kanban-lane.is-drop-target').forEach((item) => {
+    if (item.dataset.gtdDropLane !== laneKey) {
+      item.classList.remove('is-drop-target');
+    }
+  });
+
+  const target = laneKey
+    ? root.querySelector(`.gtd-kanban-lane[data-gtd-drop-lane="${laneKey}"]`)
+    : null;
+  if (target) target.classList.add('is-drop-target');
 }
 
 function setGtdDropTarget(quadrantKey, root = document.getElementById('gtdWorkspace')) {
@@ -572,24 +263,15 @@ function setGtdStepDropTarget(stepId = '', position = 'after', root = document.g
   target.classList.add(position === 'before' ? 'is-drop-before' : 'is-drop-after');
 }
 
-function initDynamicBackground() {
-  void rotateBackgroundScene();
-  if (backgroundThemeRotationId) window.clearInterval(backgroundThemeRotationId);
-  backgroundThemeRotationId = window.setInterval(() => {
-    void rotateBackgroundScene();
-  }, BACKGROUND_THEME_ROTATION_MS);
-
-  // "换图" button click
-  const switchBtn = document.getElementById('backgroundSwitchBtn');
-  if (switchBtn) {
-    switchBtn.addEventListener('click', () => {
-      void rotateBackgroundScene();
-    });
-  }
+/* ----------------------------------------------------------------
+   POMODORO TIMER — Delegated to TabOutPomodoro
+   ---------------------------------------------------------------- */
+function getPomodoroState() {
+  return window.TabOutPomodoro ? window.TabOutPomodoro.getState() : (pomodoroState || createIdlePomodoroState());
 }
 
 function createIdlePomodoroState() {
-  return {
+  return window.TabOutPomodoro ? window.TabOutPomodoro.createIdlePomodoroState() : {
     taskId: '',
     taskTitle: '',
     status: 'idle',
@@ -600,81 +282,19 @@ function createIdlePomodoroState() {
 }
 
 function normalizePomodoroState(rawState, now = Date.now()) {
-  const baseState = createIdlePomodoroState();
-  if (!rawState || typeof rawState !== 'object') return baseState;
-
-  const taskId = typeof rawState.taskId === 'string' ? rawState.taskId : '';
-  const taskTitle = typeof rawState.taskTitle === 'string' ? rawState.taskTitle : '';
-  const status = rawState.status === 'running' || rawState.status === 'paused' || rawState.status === 'completed'
-    ? rawState.status
-    : 'idle';
-  const endAt = Number.isFinite(Number(rawState.endAt)) ? Number(rawState.endAt) : 0;
-  const completedAt = typeof rawState.completedAt === 'string' ? rawState.completedAt : '';
-  const remainingMs = Math.max(0, Math.min(POMODORO_DURATION_MS, Number(rawState.remainingMs) || POMODORO_DURATION_MS));
-
-  if (!taskId || status === 'idle') return baseState;
-
-  if (status === 'running') {
-    const liveRemainingMs = Math.max(0, endAt - now);
-    if (liveRemainingMs <= 0) {
-      return {
-        taskId,
-        taskTitle,
-        status: 'completed',
-        remainingMs: 0,
-        endAt: 0,
-        completedAt: completedAt || new Date(now).toISOString(),
-      };
-    }
-
-    return {
-      taskId,
-      taskTitle,
-      status: 'running',
-      remainingMs: liveRemainingMs,
-      endAt,
-      completedAt,
-    };
-  }
-
-  if (status === 'paused') {
-    return {
-      taskId,
-      taskTitle,
-      status: 'paused',
-      remainingMs,
-      endAt: 0,
-      completedAt: '',
-    };
-  }
-
-  return {
-    taskId,
-    taskTitle,
-    status: 'completed',
-    remainingMs: 0,
-    endAt: 0,
-    completedAt,
-  };
-}
-
-async function savePomodoroState() {
-  const storage = getGtdStorage();
-  await storage.set({
-    [POMODORO_STORAGE_KEY]: pomodoroState || createIdlePomodoroState(),
-  });
+  return window.TabOutPomodoro ? window.TabOutPomodoro.normalizePomodoroState(rawState, now) : createIdlePomodoroState();
 }
 
 function stopPomodoroTicker() {
-  if (!pomodoroTickerId) return;
-  window.clearInterval(pomodoroTickerId);
-  pomodoroTickerId = 0;
+  if (window.TabOutPomodoro?.stopTicker) {
+    window.TabOutPomodoro.stopTicker();
+  }
 }
 
 function clearPomodoroToggleTimer() {
-  if (!pomodoroToggleTimerId) return;
-  window.clearTimeout(pomodoroToggleTimerId);
-  pomodoroToggleTimerId = 0;
+  if (window.TabOutPomodoro?.clearToggleTimer) {
+    window.TabOutPomodoro.clearToggleTimer();
+  }
 }
 
 function clearGtdTaskSelectionTimer() {
@@ -689,139 +309,54 @@ function queueGtdTaskSelection(taskId) {
     gtdTaskSelectionTimerId = 0;
     activeGtdComposerQuadrant = '';
     activeGtdEditingTaskId = '';
+    activeGtdEditingStepId = '';
     await updateGtdBoard((board) => window.TabOutGTD.selectTask(board, taskId));
   }, 220);
 }
 
-async function completePomodoro() {
-  const completedState = {
-    ...(pomodoroState || createIdlePomodoroState()),
-    status: 'completed',
-    remainingMs: 0,
-    endAt: 0,
-    completedAt: new Date().toISOString(),
-  };
-
-  pomodoroState = completedState;
-  stopPomodoroTicker();
-  await savePomodoroState();
-  await renderGtdWorkspace({ preserveActiveField: true });
-  shootConfetti(window.innerWidth * 0.72, Math.max(120, window.innerHeight * 0.24));
-  showToast(completedState.taskTitle ? `番茄钟完成：${completedState.taskTitle}` : '番茄钟完成');
-}
-
-function syncPomodoroTicker() {
-  stopPomodoroTicker();
-  if (!pomodoroState || pomodoroState.status !== 'running') return;
-
-  pomodoroTickerId = window.setInterval(async () => {
-    if (!pomodoroState || pomodoroState.status !== 'running') {
-      stopPomodoroTicker();
-      return;
-    }
-
-    const remainingMs = Math.max(0, pomodoroState.endAt - Date.now());
-    if (remainingMs <= 0) {
-      await completePomodoro();
-      return;
-    }
-
-    pomodoroState = {
-      ...pomodoroState,
-      remainingMs,
-    };
-    await renderGtdWorkspace({ preserveActiveField: true });
-  }, 1000);
-}
-
 async function loadPomodoroState() {
-  const storage = getGtdStorage();
-  const payload = await storage.get(POMODORO_STORAGE_KEY);
-  pomodoroState = normalizePomodoroState(payload?.[POMODORO_STORAGE_KEY]);
-  await savePomodoroState();
-  syncPomodoroTicker();
+  if (window.TabOutPomodoro?.loadState) {
+    pomodoroState = await window.TabOutPomodoro.loadState(getGtdStorage());
+  }
 }
 
 async function startPomodoro(taskId, taskTitle) {
-  pomodoroState = {
-    taskId,
-    taskTitle,
-    status: 'running',
-    remainingMs: POMODORO_DURATION_MS,
-    endAt: Date.now() + POMODORO_DURATION_MS,
-    completedAt: '',
-  };
-  await savePomodoroState();
-  syncPomodoroTicker();
-  await renderGtdWorkspace();
-  showToast(taskTitle ? `番茄钟已启动：${taskTitle}` : '番茄钟已启动');
+  if (window.TabOutPomodoro?.start) {
+    await window.TabOutPomodoro.start(taskId, taskTitle);
+  }
 }
 
 async function pausePomodoro() {
-  if (!pomodoroState || pomodoroState.status !== 'running') return;
-
-  pomodoroState = {
-    ...pomodoroState,
-    status: 'paused',
-    remainingMs: Math.max(0, pomodoroState.endAt - Date.now()),
-    endAt: 0,
-  };
-  stopPomodoroTicker();
-  await savePomodoroState();
-  await renderGtdWorkspace();
-  showToast('番茄钟已暂停');
+  if (window.TabOutPomodoro?.pause) {
+    await window.TabOutPomodoro.pause();
+  }
 }
 
 async function resumePomodoro() {
-  if (!pomodoroState || pomodoroState.status !== 'paused') return;
-
-  pomodoroState = {
-    ...pomodoroState,
-    status: 'running',
-    endAt: Date.now() + pomodoroState.remainingMs,
-  };
-  await savePomodoroState();
-  syncPomodoroTicker();
-  await renderGtdWorkspace();
-  showToast('番茄钟已继续');
+  if (window.TabOutPomodoro?.resume) {
+    await window.TabOutPomodoro.resume();
+  }
 }
 
 async function togglePomodoro(taskId, taskTitle) {
-  const currentState = normalizePomodoroState(pomodoroState);
-  const sameTask = currentState.taskId === taskId;
-
-  if (!sameTask || currentState.status === 'idle' || currentState.status === 'completed') {
-    await startPomodoro(taskId, taskTitle);
-    return;
-  }
-
-  if (currentState.status === 'running') {
-    await pausePomodoro();
-    return;
-  }
-
-  if (currentState.status === 'paused') {
-    await resumePomodoro();
+  if (window.TabOutPomodoro?.toggle) {
+    await window.TabOutPomodoro.toggle(taskId, taskTitle);
   }
 }
 
 function queuePomodoroToggle(taskId, taskTitle) {
-  clearPomodoroToggleTimer();
-  pomodoroToggleTimerId = window.setTimeout(async () => {
-    pomodoroToggleTimerId = 0;
-    activeGtdComposerQuadrant = '';
-    activeGtdEditingTaskId = '';
-    await togglePomodoro(taskId, taskTitle);
-  }, 220);
+  if (window.TabOutPomodoro?.queueToggle) {
+    window.TabOutPomodoro.queueToggle(taskId, taskTitle, () => {
+      activeGtdComposerQuadrant = '';
+      activeGtdEditingTaskId = '';
+    });
+  }
 }
 
 async function resetPomodoro(options = {}) {
-  const { skipRender = false, silent = false } = options;
-  pomodoroState = createIdlePomodoroState();
-  stopPomodoroTicker();
-  await savePomodoroState();
-  if (!skipRender) await renderGtdWorkspace();
-  if (!silent) showToast('番茄钟已重置');
+  if (window.TabOutPomodoro?.reset) {
+    await window.TabOutPomodoro.reset(options);
+  }
 }
 
 /**
@@ -1023,62 +558,24 @@ async function closeTabOutDupes() {
  * Saves a single tab to the "Saved for Later" list in chrome.storage.local.
  * @param {{ url: string, title: string }} tab
  */
+/* ----------------------------------------------------------------
+   SAVED FOR LATER — Delegated to TabOutDeferredTabs
+   ---------------------------------------------------------------- */
 async function saveTabForLater(tab) {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
-  deferred.push({
-    id:        Date.now().toString(),
-    url:       tab.url,
-    title:     tab.title,
-    savedAt:   new Date().toISOString(),
-    completed: false,
-    dismissed: false,
-  });
-  await chrome.storage.local.set({ deferred });
+  if (window.TabOutDeferredTabs) return window.TabOutDeferredTabs.saveTabForLater(tab);
 }
 
-/**
- * getSavedTabs()
- *
- * Returns all saved tabs from chrome.storage.local.
- * Filters out dismissed items (those are gone for good).
- * Splits into active (not completed) and archived (completed).
- */
 async function getSavedTabs() {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
-  const visible = deferred.filter(t => !t.dismissed);
-  return {
-    active:   visible.filter(t => !t.completed),
-    archived: visible.filter(t => t.completed),
-  };
+  if (window.TabOutDeferredTabs) return window.TabOutDeferredTabs.getSavedTabs();
+  return { active: [], archived: [] };
 }
 
-/**
- * checkOffSavedTab(id)
- *
- * Marks a saved tab as completed (checked off). It moves to the archive.
- */
 async function checkOffSavedTab(id) {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
-  const tab = deferred.find(t => t.id === id);
-  if (tab) {
-    tab.completed = true;
-    tab.completedAt = new Date().toISOString();
-    await chrome.storage.local.set({ deferred });
-  }
+  if (window.TabOutDeferredTabs) return window.TabOutDeferredTabs.checkOffSavedTab(id);
 }
 
-/**
- * dismissSavedTab(id)
- *
- * Marks a saved tab as dismissed (removed from all lists).
- */
 async function dismissSavedTab(id) {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
-  const tab = deferred.find(t => t.id === id);
-  if (tab) {
-    tab.dismissed = true;
-    await chrome.storage.local.set({ deferred });
-  }
+  if (window.TabOutDeferredTabs) return window.TabOutDeferredTabs.dismissSavedTab(id);
 }
 
 
@@ -1314,33 +811,20 @@ function timeAgo(dateStr) {
 
 function buildEncouragementQuotes() {
   const openings = [
-    '先做好',
-    '稳稳推进',
-    '今天先完成',
-    '把心收回到',
-    '认真完成',
-    '专注做好',
-    '先拿下',
-    '安心推进',
-    '沉住气做好',
-    '温柔地完成',
+    '先做好', '稳稳推进', '今天先完成', '把心收回到', '认真完成',
+    '专注做好', '先拿下', '安心推进', '沉住气做好', '温柔地完成',
+    '踏实做好', '全力以赴做好', '耐心地做完', '聚焦于', '从容应对'
   ];
   const focuses = [
-    '最重要的一件事',
-    '今天的关键任务',
-    '手头最值钱的事',
-    '眼前最该做的事',
-    '真正重要的工作',
-    '你今天的重点',
-    '能带来结果的事',
-    '让自己安心的事',
-    '值得投入的任务',
-    '决定成效的那一步',
+    '最重要的一件事', '今天的关键任务', '手头最值钱的事', '眼前最该做的事',
+    '真正重要的工作', '你今天的重点', '能带来结果的事', '让自己安心的事',
+    '值得投入的任务', '决定成效的那一步', '最能带来成就感的事', '真正有长远价值的事',
+    '能让你踏实的前行一步', '手边最基础也最核心的细节', '那个能打破僵局的任务'
   ];
   const endings = [
-    '，今天会更顺。',
-    '，状态会跟上来。',
-    '，进度会更稳。',
+    '，今天会更顺。', '，状态会跟上来。', '，进度会更稳。',
+    '，其余的交给时间。', '，一切都在变好。', '，你会更有掌控感。',
+    '，哪怕是一小步也很有意义。', '，世界会为你让步。'
   ];
 
   const quotes = [];
@@ -1351,14 +835,64 @@ function buildEncouragementQuotes() {
       }
     }
   }
-  return quotes.slice(0, 300);
+
+  const classicQuotes = [
+    '每一个不起舞的日子，都是对生命的辜负。 — 尼采',
+    '专注你所能控制的，其余的顺其自然。',
+    '慢步前行，但决不后退。 — 林肯',
+    '最暗的夜，才能看见最亮的星。',
+    '博观而约取，厚积而薄发。 — 苏轼',
+    '所谓无底深渊，下去也是前程万里。 — 木心',
+    '志在山顶的人，不会贪恋山腰的风景。',
+    '少做无谓的纠结，多做笃定的推进。',
+    '答案在路上，自由在风里。',
+    '流水不争先，争的是滔滔不绝。',
+    '与其焦虑未来，不如专注当下能写下的这一笔。',
+    '专注是一种力量，它能把普通的一天变成非凡。',
+    '你每前进一步，焦虑就会减少一分。',
+    '做好眼前事，珍惜当下人。',
+    '既然目标是地平线，留给世界的只能是背影。 — 汪国真',
+    '追风赶月莫停留，平芜尽处是春山。',
+    '凡是过往，皆为序章。 — 莎士比亚',
+    '不积跬步，无以至千里。 — 荀子',
+    '心有所期，全力以赴；定有所成，不负韶华。',
+    '种一棵树最好的时间是十年前，其次是现在。',
+    '把你的精力和时间，用在真正能让你成长的事情上。',
+    '生活就在这一刻，而不是那个你想达到的终点。',
+    '保持专注，安静地把事情做好，这本身就是最强大的姿态。',
+    '不必行色匆匆，不必光芒四射，只管像松柏一样沉稳挺拔。',
+    '精进自己，是解决一切焦虑最有效的解药。',
+    '不要因为走得太远，而忘记为什么出发。',
+    '成功的秘诀是把平凡的事做得极不平凡。 — 洛克菲勒',
+    '行百里者半九十，坚持到最后的才是风景。',
+    '当你的才华还撑不起你的野心时，就应该静下心来学习。',
+    '越是黑暗的地方，光芒就越耀眼。',
+    '把注意力留给自己，把情绪留给风景。',
+    '路虽远，行则将至；事虽难，做则必成。 — 《荀子·修身》'
+  ];
+
+  const allQuotes = [];
+  let qIdx = 0;
+  let cIdx = 0;
+  while (qIdx < quotes.length || cIdx < classicQuotes.length) {
+    if (qIdx < quotes.length) allQuotes.push(quotes[qIdx++]);
+    if (qIdx < quotes.length) allQuotes.push(quotes[qIdx++]);
+    if (cIdx < classicQuotes.length) {
+      allQuotes.push(classicQuotes[cIdx++]);
+    } else {
+      cIdx = 0;
+      allQuotes.push(classicQuotes[cIdx++]);
+    }
+    if (qIdx >= quotes.length && cIdx >= classicQuotes.length) break;
+  }
+
+  return allQuotes.slice(0, 1600);
 }
 
 const ENCOURAGEMENT_QUOTES = buildEncouragementQuotes();
 
-function getDailyEncouragement(date = new Date()) {
-  const rotationIndex = Math.floor(date.getTime() / ENCOURAGEMENT_ROTATION_MS);
-  return ENCOURAGEMENT_QUOTES[rotationIndex % ENCOURAGEMENT_QUOTES.length];
+function getDailyEncouragement() {
+  return ENCOURAGEMENT_QUOTES[Math.floor(Math.random() * ENCOURAGEMENT_QUOTES.length)];
 }
 
 function renderHeaderEncouragement(date = new Date()) {
@@ -1644,7 +1178,7 @@ function buildOverflowChips(hiddenTabs, urlCounts = {}) {
     let domain = '';
     try { domain = new URL(tab.url).hostname; } catch {}
     const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
-    return `<div class="page-chip clickable${chipClass}" data-action="focus-tab" data-tab-url="${safeUrl}" title="${safeTitle}">
+    return `<div class="page-chip clickable${chipClass}" draggable="true" data-action="focus-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="${safeTitle}">
       ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" data-hide-on-error="true">` : ''}
       <span class="chip-text">${label}</span>${dupeTag}
       <div class="chip-actions">
@@ -1725,7 +1259,7 @@ function renderDomainCard(group) {
     let domain = '';
     try { domain = new URL(tab.url).hostname; } catch {}
     const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
-    return `<div class="page-chip clickable${chipClass}" data-action="focus-tab" data-tab-url="${safeUrl}" title="${safeTitle}">
+    return `<div class="page-chip clickable${chipClass}" draggable="true" data-action="focus-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="${safeTitle}">
       ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" data-hide-on-error="true">` : ''}
       <span class="chip-text">${label}</span>${dupeTag}
       <div class="chip-actions">
@@ -1774,109 +1308,18 @@ function renderDomainCard(group) {
 
 
 /* ----------------------------------------------------------------
-   SAVED FOR LATER — Render Checklist Column
+   SAVED FOR LATER — Render Checklist Column (Delegated)
    ---------------------------------------------------------------- */
-
-/**
- * renderDeferredColumn()
- *
- * Reads saved tabs from chrome.storage.local and renders the right-side
- * "Saved for Later" checklist column. Shows active items as a checklist
- * and completed items in a collapsible archive.
- */
 async function renderDeferredColumn() {
-  const column         = document.getElementById('deferredColumn');
-  const list           = document.getElementById('deferredList');
-  const empty          = document.getElementById('deferredEmpty');
-  const countEl        = document.getElementById('deferredCount');
-  const archiveEl      = document.getElementById('deferredArchive');
-  const archiveCountEl = document.getElementById('archiveCount');
-  const archiveList    = document.getElementById('archiveList');
-
-  if (!column) return;
-
-  try {
-    const { active, archived } = await getSavedTabs();
-
-    // Hide the entire column if there's nothing to show
-    if (active.length === 0 && archived.length === 0) {
-      column.style.display = 'none';
-      return;
-    }
-
-    column.style.display = 'block';
-
-    // Render active checklist items
-    if (active.length > 0) {
-      countEl.textContent = `${active.length} item${active.length !== 1 ? 's' : ''}`;
-      list.innerHTML = active.map(item => renderDeferredItem(item)).join('');
-      list.style.display = 'block';
-      empty.style.display = 'none';
-    } else {
-      list.style.display = 'none';
-      countEl.textContent = '';
-      empty.style.display = 'block';
-    }
-
-    // Render archive section
-    if (archived.length > 0) {
-      archiveCountEl.textContent = `(${archived.length})`;
-      archiveList.innerHTML = archived.map(item => renderArchiveItem(item)).join('');
-      archiveEl.style.display = 'block';
-    } else {
-      archiveEl.style.display = 'none';
-    }
-
-  } catch (err) {
-    console.warn('[tab-out] Could not load saved tabs:', err);
-    column.style.display = 'none';
-  }
+  if (window.TabOutDeferredTabs) return window.TabOutDeferredTabs.renderDeferredColumn();
 }
 
-/**
- * renderDeferredItem(item)
- *
- * Builds HTML for one active checklist item: checkbox, title link,
- * domain, time ago, dismiss button.
- */
 function renderDeferredItem(item) {
-  let domain = '';
-  try { domain = new URL(item.url).hostname.replace(/^www\./, ''); } catch {}
-  const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
-  const ago = timeAgo(item.savedAt);
-
-  return `
-    <div class="deferred-item" data-deferred-id="${item.id}">
-      <input type="checkbox" class="deferred-checkbox" data-action="check-deferred" data-deferred-id="${item.id}">
-      <div class="deferred-info">
-        <a href="${item.url}" target="_blank" rel="noopener" class="deferred-title" title="${(item.title || '').replace(/"/g, '&quot;')}">
-          <img src="${faviconUrl}" alt="" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px" data-hide-on-error="true">${item.title || item.url}
-        </a>
-        <div class="deferred-meta">
-          <span>${domain}</span>
-          <span>${ago}</span>
-        </div>
-      </div>
-      <button class="deferred-dismiss" data-action="dismiss-deferred" data-deferred-id="${item.id}" title="Dismiss">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-      </button>
-    </div>`;
+  return window.TabOutDeferredTabs ? window.TabOutDeferredTabs.renderDeferredItem(item) : '';
 }
 
-/**
- * renderArchiveItem(item)
- *
- * Builds HTML for one completed/archived item (simpler: just title + date).
- */
 function renderArchiveItem(item) {
-  const ago = item.completedAt ? timeAgo(item.completedAt) : timeAgo(item.savedAt);
-  return `
-    <div class="archive-item">
-      <a href="${item.url}" target="_blank" rel="noopener" class="archive-item-title" title="${(item.title || '').replace(/"/g, '&quot;')}">
-        ${item.title || item.url}
-      </a>
-      <span class="archive-item-date">${ago}</span>
-    </div>`;
+  return window.TabOutDeferredTabs ? window.TabOutDeferredTabs.renderArchiveItem(item) : '';
 }
 
 
@@ -2111,6 +1554,43 @@ function syncWorkspaceTabbarMount(root) {
   if (tabbar) mount.appendChild(tabbar);
 }
 
+// 开始拖拽 GTD 分隔条：实时调整 checklist 面板宽度，松手后持久化
+function beginGtdDividerDrag(row, startClientX) {
+  const rowRect = row.getBoundingClientRect();
+  if (!rowRect.width) return;
+  // 拖拽上限同时受面板最小宽约束，保证四象限区域可用
+  const maxWidth = Math.max(GTD_DETAIL_MIN_WIDTH, Math.round(rowRect.width * 0.6));
+
+  const clampWidth = (clientX) => Math.round(
+    Math.min(Math.max(rowRect.right - clientX, GTD_DETAIL_MIN_WIDTH), maxWidth)
+  );
+
+  let lastWidth = clampWidth(startClientX);
+  const onMove = (ev) => {
+    lastWidth = clampWidth(ev.clientX);
+    row.style.setProperty('--gtd-detail-width', `${lastWidth}px`);
+  };
+
+  const onUp = async () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.body.classList.remove('gtd-divider-dragging');
+    if (lastWidth === uiPrefs.gtdDetailWidth) return;
+    uiPrefs.gtdDetailWidth = lastWidth;
+    saveUiPrefs();
+    try {
+      await renderGtdWorkspace();
+    } catch (err) {
+      console.error('[tab-out] GTD divider resize failed:', err);
+      showToast('调整面板宽度失败');
+    }
+  };
+
+  document.body.classList.add('gtd-divider-dragging');
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
 async function renderGtdWorkspace(options = {}) {
   const root = document.getElementById('gtdWorkspace');
   if (!root || !window.TabOutGTD) return;
@@ -2127,12 +1607,27 @@ async function renderGtdWorkspace(options = {}) {
     const activeScope = uiPrefs.activeGtdScope || 'day';
     const scopeInfo = scopeMeta[activeScope];
     const board = await window.TabOutGTD.getScopeBoard(storage, scopeInfo.key);
+    const quadrantConfig = await window.TabOutGTD.getQuadrantConfig(storage);
+    const quickLinks = window.TabOutQuickLinks
+      ? await window.TabOutQuickLinks.getQuickLinks(storage)
+      : await window.TabOutGTD.getQuickLinks(storage);
     root.innerHTML = window.TabOutGTD.renderWorkspaceShell(board, {
       composerQuadrant: activeGtdComposerQuadrant,
       editingTaskId: activeGtdEditingTaskId,
       editingStepId: activeGtdEditingStepId,
-      pomodoro: pomodoroState || createIdlePomodoroState(),
+      batchStepTaskId: activeGtdBatchStepTaskId,
+      editingQuadrantKey: activeGtdEditingQuadrantKey,
+      quadrantConfig,
+      quickLinks,
+      pomodoro: getPomodoroState(),
       collapsed: uiPrefs.gtdCollapsed,
+      detailCollapsed: uiPrefs.gtdDetailCollapsed,
+      detailWidth: uiPrefs.gtdDetailWidth,
+      expandedCompletedQuadrants: uiPrefs.expandedCompletedQuadrants || {},
+      expandedCompletedSteps: uiPrefs.expandedCompletedSteps || {},
+      expandedKanbanTasks: uiPrefs.expandedKanbanTasks || {},
+      expandedChecklistSteps: uiPrefs.expandedChecklistSteps || {},
+      viewMode: uiPrefs.gtdViewMode || 'quadrant',
       activeTab: uiPrefs.workspaceTab,
       activeScope,
       scopeLabel: scopeInfo.label,
@@ -2149,7 +1644,19 @@ async function renderGtdWorkspace(options = {}) {
     }
     const restoredField = restoreGtdFieldState(root, fieldState);
 
-    if (!restoredField && activeGtdEditingTaskId) {
+    if (!restoredField && activeGtdEditingQuadrantKey) {
+      const editInput = root.querySelector(
+        `form[data-gtd-form="edit-quadrant-title"][data-quadrant="${activeGtdEditingQuadrantKey}"] input[name="title"]`
+      );
+      if (editInput) {
+        requestAnimationFrame(() => {
+          editInput.focus();
+          editInput.select();
+        });
+      } else {
+        activeGtdEditingQuadrantKey = '';
+      }
+    } else if (!restoredField && activeGtdEditingTaskId) {
       const editInput = root.querySelector(
         `form[data-gtd-form="edit-task"][data-task-id="${activeGtdEditingTaskId}"] input[name="title"]`
       );
@@ -2373,6 +1880,43 @@ function initGtdWorkspace() {
   });
 
   root.addEventListener('dragstart', (e) => {
+    const kanbanItem = e.target.closest('[data-gtd-action="drag-kanban-item"][draggable="true"]');
+    if (kanbanItem) {
+      if (e.target.closest('input, button, textarea, select')) {
+        e.preventDefault();
+        return;
+      }
+
+      clearGtdTaskSelectionTimer();
+      clearPomodoroToggleTimer();
+      clearGtdDragState(root);
+
+      const taskId = kanbanItem.dataset.taskId || '';
+      const stepId = kanbanItem.dataset.stepId || '';
+      const laneEl = kanbanItem.closest('.gtd-kanban-lane[data-gtd-drop-lane]');
+      const sourceLane = laneEl?.dataset.gtdDropLane || '';
+
+      activeGtdKanbanDragState = {
+        taskId,
+        stepId,
+        sourceLane,
+      };
+
+      kanbanItem.classList.add('is-dragging', 'is-kanban-dragging');
+
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', stepId || taskId);
+        e.dataTransfer.setData('application/json', JSON.stringify({
+          type: stepId ? 'kanban-step' : 'kanban-task',
+          taskId,
+          stepId,
+          sourceLane,
+        }));
+      }
+      return;
+    }
+
     const taskItem = e.target.closest('.gtd-task-item[draggable="true"][data-task-id]');
     if (!taskItem) return;
 
@@ -2417,6 +1961,19 @@ function initGtdWorkspace() {
   });
 
   root.addEventListener('dragover', (e) => {
+    if (activeGtdKanbanDragState) {
+      const laneEl = e.target.closest('.gtd-kanban-lane[data-gtd-drop-lane]');
+      if (!laneEl) {
+        setGtdKanbanDropTarget('', root);
+        return;
+      }
+
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      setGtdKanbanDropTarget(laneEl.dataset.gtdDropLane || '', root);
+      return;
+    }
+
     if (activeGtdStepDragState?.stepId) {
       const stepList = e.target.closest('.gtd-step-list');
       if (!stepList) return;
@@ -2462,6 +2019,58 @@ function initGtdWorkspace() {
   });
 
   root.addEventListener('drop', async (e) => {
+    const laneEl = e.target.closest('.gtd-kanban-lane[data-gtd-drop-lane]');
+    if (laneEl) {
+      let dragState = activeGtdKanbanDragState;
+      if (!dragState) {
+        try {
+          const raw = e.dataTransfer?.getData('application/json');
+          if (raw) dragState = JSON.parse(raw);
+        } catch {}
+      }
+
+      if (dragState?.taskId) {
+        e.preventDefault();
+        const targetLane = laneEl.dataset.gtdDropLane || '';
+        const { taskId, stepId, sourceLane } = dragState;
+        clearGtdDragState(root);
+
+        if (!targetLane || !taskId) return;
+        if (sourceLane === targetLane && !stepId) return;
+
+        const laneTitleMap = {
+          todo: '待完成',
+          planned: '今日计划',
+          doing: '开始工作',
+          done: '已完成',
+        };
+        const targetLaneTitle = laneTitleMap[targetLane] || targetLane;
+
+        try {
+          if (stepId) {
+            await updateGtdBoard((board) =>
+              window.TabOutGTD.updateChecklistItemKanbanStatus(board, taskId, stepId, targetLane)
+            );
+            showToast(`步骤已移动至「${targetLaneTitle}」`);
+          } else {
+            const nextBoard = await updateGtdBoard((board) =>
+              window.TabOutGTD.updateTaskKanbanStatus(board, taskId, targetLane)
+            );
+            if (targetLane === 'done' && nextBoard.tasks.length > 0 && nextBoard.tasks.every((task) => task.completed)) {
+              shootConfetti(window.innerWidth / 2, Math.max(140, window.innerHeight * 0.2));
+              showToast('今天四象限已全部完成');
+            } else {
+              showToast(`任务及子步骤已移动至「${targetLaneTitle}」`);
+            }
+          }
+        } catch (err) {
+          console.error('[tab-out] Kanban drop failed:', err);
+          showToast('移动看板事项失败');
+        }
+        return;
+      }
+    }
+
     if (activeGtdStepDragState?.stepId) {
       const { stepId, taskId, stepLevel, startX, currentX, targetStepId, position } = activeGtdStepDragState;
       e.preventDefault();
@@ -2518,6 +2127,28 @@ function initGtdWorkspace() {
     const formType = form.dataset.gtdForm;
 
     try {
+      if (formType === 'edit-quadrant-title') {
+        const quadrantKey = form.dataset.quadrant;
+        const input = form.querySelector('input[name="title"]');
+        const title = input?.value?.trim();
+        if (!title) {
+          input?.focus();
+          return;
+        }
+
+        const storage = getGtdStorage();
+        const currentConfig = await window.TabOutGTD.getQuadrantConfig(storage);
+        const nextConfig = {
+          ...currentConfig,
+          [quadrantKey]: title,
+        };
+        await window.TabOutGTD.saveQuadrantConfig(storage, nextConfig);
+        activeGtdEditingQuadrantKey = '';
+        await renderGtdWorkspace();
+        showToast('象限标题已更新');
+        return;
+      }
+
       if (formType === 'add-task') {
         const quadrant = form.dataset.quadrant;
         const input = form.querySelector('input[name="title"]');
@@ -2530,6 +2161,7 @@ function initGtdWorkspace() {
         activeGtdEditingTaskId = '';
         activeGtdEditingStepId = '';
         activeGtdComposerQuadrant = '';
+        activeGtdEditingQuadrantKey = '';
         await updateGtdBoard((board) => window.TabOutGTD.addTask(board, quadrant, title));
         showToast('任务已加入今日四象限');
         return;
@@ -2547,6 +2179,7 @@ function initGtdWorkspace() {
         activeGtdComposerQuadrant = '';
         activeGtdEditingTaskId = '';
         activeGtdEditingStepId = '';
+        activeGtdEditingQuadrantKey = '';
         await updateGtdBoard((board) => window.TabOutGTD.updateTaskTitle(board, taskId, title));
         showToast('任务已更新');
         return;
@@ -2563,8 +2196,24 @@ function initGtdWorkspace() {
         }
 
         activeGtdEditingStepId = '';
+        activeGtdEditingQuadrantKey = '';
         await updateGtdBoard((board) => window.TabOutGTD.updateChecklistItemText(board, taskId, stepId, text));
         showToast('步骤已更新');
+        return;
+      }
+
+      if (formType === 'add-batch-steps') {
+        const taskId = form.dataset.taskId;
+        const textarea = form.querySelector('textarea[name="batchText"]');
+        const texts = window.TabOutGTD.splitBatchStepLines(textarea?.value || '');
+        if (!texts.length) {
+          textarea?.focus();
+          return;
+        }
+
+        activeGtdBatchStepTaskId = '';
+        await updateGtdBoard((board) => window.TabOutGTD.addChecklistItems(board, taskId, texts));
+        showToast(`已批量添加 ${texts.length} 个步骤`);
         return;
       }
 
@@ -2586,6 +2235,98 @@ function initGtdWorkspace() {
     }
   });
 
+  root.addEventListener('focusout', async (e) => {
+    const stepForm = e.target.closest('form[data-gtd-form="edit-step"]');
+    if (stepForm) {
+      if (e.relatedTarget && stepForm.contains(e.relatedTarget)) return;
+      const stepId = stepForm.dataset.stepId;
+      if (!activeGtdEditingStepId || activeGtdEditingStepId !== stepId) return;
+
+      const taskId = stepForm.dataset.taskId;
+      const input = stepForm.querySelector('input[name="text"]');
+      const text = input?.value?.trim();
+
+      activeGtdEditingStepId = '';
+      try {
+        if (text) {
+          const storage = getGtdStorage();
+          const scopeMeta = window.TabOutGTD.getBoardScope(new Date());
+          const scopeInfo = scopeMeta[uiPrefs.activeGtdScope || 'day'];
+          const board = await window.TabOutGTD.getScopeBoard(storage, scopeInfo.key);
+          const task = (board.tasks || []).find((t) => t.id === taskId);
+          const step = task?.checklist?.find((s) => s.id === stepId);
+          if (step && step.text !== text) {
+            await updateGtdBoard((b) => window.TabOutGTD.updateChecklistItemText(b, taskId, stepId, text));
+            showToast('步骤已更新');
+            return;
+          }
+        }
+        await renderGtdWorkspace();
+      } catch (_) {
+        await renderGtdWorkspace();
+      }
+      return;
+    }
+
+    const taskForm = e.target.closest('form[data-gtd-form="edit-task"]');
+    if (taskForm) {
+      if (e.relatedTarget && taskForm.contains(e.relatedTarget)) return;
+      const taskId = taskForm.dataset.taskId;
+      if (!activeGtdEditingTaskId || activeGtdEditingTaskId !== taskId) return;
+
+      const input = taskForm.querySelector('input[name="title"]');
+      const title = input?.value?.trim();
+
+      activeGtdEditingTaskId = '';
+      try {
+        if (title) {
+          const storage = getGtdStorage();
+          const scopeMeta = window.TabOutGTD.getBoardScope(new Date());
+          const scopeInfo = scopeMeta[uiPrefs.activeGtdScope || 'day'];
+          const board = await window.TabOutGTD.getScopeBoard(storage, scopeInfo.key);
+          const task = (board.tasks || []).find((t) => t.id === taskId);
+          if (task && task.title !== title) {
+            await updateGtdBoard((b) => window.TabOutGTD.updateTaskTitle(b, taskId, title));
+            showToast('任务已更新');
+            return;
+          }
+        }
+        await renderGtdWorkspace();
+      } catch (_) {
+        await renderGtdWorkspace();
+      }
+      return;
+    }
+
+    const form = e.target.closest('form[data-gtd-form="edit-quadrant-title"]');
+    if (!form) return;
+    if (e.relatedTarget && form.contains(e.relatedTarget)) return;
+
+    const quadrantKey = form.dataset.quadrant;
+    const input = form.querySelector('input[name="title"]');
+    const title = input?.value?.trim();
+    if (!title || !activeGtdEditingQuadrantKey) {
+      activeGtdEditingQuadrantKey = '';
+      await renderGtdWorkspace();
+      return;
+    }
+
+    try {
+      const storage = getGtdStorage();
+      const currentConfig = await window.TabOutGTD.getQuadrantConfig(storage);
+      if (currentConfig[quadrantKey] !== title) {
+        const nextConfig = { ...currentConfig, [quadrantKey]: title };
+        await window.TabOutGTD.saveQuadrantConfig(storage, nextConfig);
+        showToast('象限标题已更新');
+      }
+      activeGtdEditingQuadrantKey = '';
+      await renderGtdWorkspace();
+    } catch (_) {
+      activeGtdEditingQuadrantKey = '';
+      await renderGtdWorkspace();
+    }
+  });
+
   root.addEventListener('change', async (e) => {
     const actionEl = e.target.closest('[data-gtd-action]');
     if (!actionEl) return;
@@ -2604,14 +2345,17 @@ function initGtdWorkspace() {
         activeGtdComposerQuadrant = '';
         activeGtdEditingTaskId = '';
         activeGtdEditingStepId = '';
+        activeGtdEditingQuadrantKey = '';
         if (pomodoroState?.status && pomodoroState.status !== 'idle') {
           await resetPomodoro({ skipRender: true, silent: true });
         }
 
+        const storage = getGtdStorage();
+        const quadrantConfig = await window.TabOutGTD.getQuadrantConfig(storage);
         const board = window.TabOutGTD.importBoardFromMarkdown(markdown, {
           date: window.TabOutGTD.getBoardDate(),
+          quadrantConfig,
         });
-        const storage = getGtdStorage();
         await window.TabOutGTD.saveBoard(storage, board);
         await renderGtdWorkspace();
         showToast('日报已导入到今天');
@@ -2648,6 +2392,72 @@ function initGtdWorkspace() {
   });
 
   root.addEventListener('click', async (e) => {
+    if (activeGtdEditingStepId && !e.target.closest('form[data-gtd-form="edit-step"]')) {
+      const form = root.querySelector(`form[data-gtd-form="edit-step"][data-step-id="${activeGtdEditingStepId}"]`);
+      const stepId = activeGtdEditingStepId;
+      activeGtdEditingStepId = '';
+      const actionEl = e.target.closest('[data-gtd-action]');
+      if (form) {
+        const taskId = form.dataset.taskId;
+        const input = form.querySelector('input[name="text"]');
+        const text = input?.value?.trim();
+        try {
+          if (text) {
+            const storage = getGtdStorage();
+            const scopeMeta = window.TabOutGTD.getBoardScope(new Date());
+            const scopeInfo = scopeMeta[uiPrefs.activeGtdScope || 'day'];
+            const board = await window.TabOutGTD.getScopeBoard(storage, scopeInfo.key);
+            const task = (board.tasks || []).find((t) => t.id === taskId);
+            const step = task?.checklist?.find((s) => s.id === stepId);
+            if (step && step.text !== text) {
+              await updateGtdBoard((b) => window.TabOutGTD.updateChecklistItemText(b, taskId, stepId, text));
+              showToast('步骤已更新');
+            } else if (!actionEl) {
+              await renderGtdWorkspace();
+            }
+          } else if (!actionEl) {
+            await renderGtdWorkspace();
+          }
+        } catch (_) {
+          if (!actionEl) await renderGtdWorkspace();
+        }
+      } else if (!actionEl) {
+        await renderGtdWorkspace();
+      }
+    }
+
+    if (activeGtdEditingTaskId && !e.target.closest('form[data-gtd-form="edit-task"]')) {
+      const form = root.querySelector(`form[data-gtd-form="edit-task"][data-task-id="${activeGtdEditingTaskId}"]`);
+      const taskId = activeGtdEditingTaskId;
+      activeGtdEditingTaskId = '';
+      const actionEl = e.target.closest('[data-gtd-action]');
+      if (form) {
+        const input = form.querySelector('input[name="title"]');
+        const title = input?.value?.trim();
+        try {
+          if (title) {
+            const storage = getGtdStorage();
+            const scopeMeta = window.TabOutGTD.getBoardScope(new Date());
+            const scopeInfo = scopeMeta[uiPrefs.activeGtdScope || 'day'];
+            const board = await window.TabOutGTD.getScopeBoard(storage, scopeInfo.key);
+            const task = (board.tasks || []).find((t) => t.id === taskId);
+            if (task && task.title !== title) {
+              await updateGtdBoard((b) => window.TabOutGTD.updateTaskTitle(b, taskId, title));
+              showToast('任务已更新');
+            } else if (!actionEl) {
+              await renderGtdWorkspace();
+            }
+          } else if (!actionEl) {
+            await renderGtdWorkspace();
+          }
+        } catch (_) {
+          if (!actionEl) await renderGtdWorkspace();
+        }
+      } else if (!actionEl) {
+        await renderGtdWorkspace();
+      }
+    }
+
     const actionEl = e.target.closest('[data-gtd-action]');
     if (!actionEl) return;
 
@@ -2655,6 +2465,57 @@ function initGtdWorkspace() {
     if (action === 'toggle-task' || action === 'toggle-step') return;
 
     try {
+      if (action === 'switch-gtd-view') {
+        const nextView = actionEl.dataset.view;
+        if (nextView === 'kanban' || nextView === 'quadrant') {
+          uiPrefs.gtdViewMode = nextView;
+          saveUiPrefs();
+          await renderGtdWorkspace();
+        }
+        return;
+      }
+
+      if (action === 'toggle-kanban-task-collapse') {
+        const taskId = actionEl.dataset.taskId;
+        const lane = actionEl.dataset.lane || '';
+        if (!taskId) return;
+        const key = lane ? `${lane}:${taskId}` : taskId;
+        uiPrefs.expandedKanbanTasks = uiPrefs.expandedKanbanTasks || {};
+        uiPrefs.expandedKanbanTasks[key] = !uiPrefs.expandedKanbanTasks[key];
+        saveUiPrefs();
+        await renderGtdWorkspace();
+        return;
+      }
+
+      if (action === 'toggle-step-collapse') {
+        const stepId = actionEl.dataset.stepId;
+        if (!stepId) return;
+        uiPrefs.expandedChecklistSteps = uiPrefs.expandedChecklistSteps || {};
+        uiPrefs.expandedChecklistSteps[stepId] = !uiPrefs.expandedChecklistSteps[stepId];
+        saveUiPrefs();
+        await renderGtdWorkspace();
+        return;
+      }
+
+      if (action === 'toggle-completed-tasks') {
+        const quadrant = actionEl.dataset.quadrant;
+        if (!quadrant) return;
+        uiPrefs.expandedCompletedQuadrants = uiPrefs.expandedCompletedQuadrants || {};
+        uiPrefs.expandedCompletedQuadrants[quadrant] = !uiPrefs.expandedCompletedQuadrants[quadrant];
+        saveUiPrefs();
+        await renderGtdWorkspace();
+        return;
+      }
+
+      if (action === 'toggle-completed-steps') {
+        const taskId = actionEl.dataset.taskId;
+        if (!taskId) return;
+        uiPrefs.expandedCompletedSteps = uiPrefs.expandedCompletedSteps || {};
+        uiPrefs.expandedCompletedSteps[taskId] = !uiPrefs.expandedCompletedSteps[taskId];
+        saveUiPrefs();
+        await renderGtdWorkspace();
+        return;
+      }
       if (action === 'import-gtd-report') {
         const fileInput = root.querySelector('[data-gtd-action="import-gtd-file"]');
         fileInput?.click();
@@ -2665,9 +2526,15 @@ function initGtdWorkspace() {
         if (uiPrefs.activeGtdScope !== 'day') return;
         const storage = getGtdStorage();
         const board = await window.TabOutGTD.getTodayBoard(storage);
-        const markdown = window.TabOutGTD.exportBoardToMarkdown(board);
+        const quadrantConfig = await window.TabOutGTD.getQuadrantConfig(storage);
+        const markdown = window.TabOutGTD.exportBoardToMarkdown(board, quadrantConfig);
         downloadTextFile(`gtd-daily-report-${board.date}.md`, markdown, 'text/markdown;charset=utf-8');
         showToast('日报已导出为 Markdown');
+        return;
+      }
+
+      if (action === 'open-gtd-archive') {
+        await openGtdArchiveDialog();
         return;
       }
 
@@ -2680,7 +2547,7 @@ function initGtdWorkspace() {
         const scopeMeta = window.TabOutGTD.getBoardScope(new Date());
         const scopeInfo = scopeMeta[uiPrefs.activeGtdScope || 'day'];
         const board = await window.TabOutGTD.getScopeBoard(storage, scopeInfo.key);
-        board.tasks = [];
+        board.tasks = (board.tasks || []).filter((t) => t.archived);
         board.selectedTaskId = '';
         board.updatedAt = new Date().toISOString();
         await window.TabOutGTD.saveScopeBoard(storage, board);
@@ -2696,6 +2563,7 @@ function initGtdWorkspace() {
         activeGtdComposerQuadrant = '';
         activeGtdEditingTaskId = '';
         activeGtdEditingStepId = '';
+        activeGtdEditingQuadrantKey = '';
         if (pomodoroState?.status && pomodoroState.status !== 'idle') {
           await resetPomodoro({ skipRender: true, silent: true });
         }
@@ -2708,6 +2576,13 @@ function initGtdWorkspace() {
 
       if (action === 'toggle-gtd-section') {
         uiPrefs.gtdCollapsed = !uiPrefs.gtdCollapsed;
+        saveUiPrefs();
+        await renderGtdWorkspace();
+        return;
+      }
+
+      if (action === 'toggle-gtd-detail') {
+        uiPrefs.gtdDetailCollapsed = !uiPrefs.gtdDetailCollapsed;
         saveUiPrefs();
         await renderGtdWorkspace();
         return;
@@ -2738,6 +2613,7 @@ function initGtdWorkspace() {
         activeGtdComposerQuadrant = '';
         activeGtdEditingTaskId = '';
         activeGtdEditingStepId = '';
+        activeGtdEditingQuadrantKey = '';
         await togglePomodoro(taskId, actionEl.dataset.taskTitle || '');
         return;
       }
@@ -2749,16 +2625,17 @@ function initGtdWorkspace() {
         return;
       }
 
-      if (action === 'delete-task') {
+      if (action === 'delete-task' || action === 'archive-task') {
         const taskId = actionEl.dataset.taskId;
         activeGtdComposerQuadrant = '';
         activeGtdEditingTaskId = '';
         activeGtdEditingStepId = '';
+        activeGtdEditingQuadrantKey = '';
         if (pomodoroState?.taskId === taskId) {
           await resetPomodoro({ skipRender: true, silent: true });
         }
-        await updateGtdBoard((board) => window.TabOutGTD.deleteTask(board, taskId));
-        showToast('任务已删除');
+        await updateGtdBoard((board) => window.TabOutGTD.archiveTask(board, taskId));
+        showToast('任务已归档');
         return;
       }
 
@@ -2786,20 +2663,29 @@ function initGtdWorkspace() {
         showToast('checklist 已保存');
       }
 
+      if (action === 'toggle-batch-steps') {
+        const taskId = actionEl.dataset.taskId;
+        if (!taskId) return;
+        activeGtdBatchStepTaskId = activeGtdBatchStepTaskId === taskId ? '' : taskId;
+        await renderGtdWorkspace();
+        if (activeGtdBatchStepTaskId) {
+          const textarea = document.querySelector('form[data-gtd-form="add-batch-steps"] textarea[name="batchText"]');
+          if (textarea) requestAnimationFrame(() => textarea.focus());
+        }
+        return;
+      }
+
+      if (action === 'close-batch-steps') {
+        activeGtdBatchStepTaskId = '';
+        await renderGtdWorkspace();
+        return;
+      }
+
       if (action === 'open-reuse-checklist') {
         const taskId = actionEl.dataset.taskId;
         if (!taskId) return;
-        const dialog = document.getElementById('reuseDialog');
-        const list = document.getElementById('reuseList');
-        const search = document.getElementById('reuseSearch');
-        if (!dialog || !list) return;
-        const storage = getGtdStorage();
-        const saved = await window.TabOutGTD.getSavedChecklists(storage);
-        dialog.dataset.targetTaskId = taskId;
-        search.value = '';
-        renderReuseList(list, saved);
-        dialog.style.display = 'flex';
-        setTimeout(() => search.focus(), 50);
+        await openReuseDialog(taskId);
+        return;
       }
     } catch (err) {
       console.error('[tab-out] GTD click failed:', err);
@@ -2808,6 +2694,26 @@ function initGtdWorkspace() {
   });
 
   root.addEventListener('dblclick', async (e) => {
+    const titleEl = e.target.closest('.gtd-quadrant-title, [data-gtd-action="edit-quadrant-title"]');
+    if (titleEl && !e.target.closest('.gtd-quadrant-title-edit-form')) {
+      const quadrantKey = titleEl.dataset.quadrant || '';
+      if (quadrantKey) {
+        try {
+          clearGtdTaskSelectionTimer();
+          clearPomodoroToggleTimer();
+          activeGtdComposerQuadrant = '';
+          activeGtdEditingTaskId = '';
+          activeGtdEditingStepId = '';
+          activeGtdEditingQuadrantKey = quadrantKey;
+          await renderGtdWorkspace();
+        } catch (err) {
+          console.error('[tab-out] GTD quadrant title edit failed:', err);
+          showToast('打开象限标题编辑失败');
+        }
+        return;
+      }
+    }
+
     const pomodoroTrack = e.target.closest('[data-gtd-action="toggle-pomodoro-track"]');
     if (pomodoroTrack) {
       try {
@@ -2833,6 +2739,7 @@ function initGtdWorkspace() {
         activeGtdComposerQuadrant = '';
         activeGtdEditingTaskId = taskId;
         activeGtdEditingStepId = '';
+        activeGtdEditingQuadrantKey = '';
 
         const storage = getGtdStorage();
         const scopeMeta = window.TabOutGTD.getBoardScope(new Date());
@@ -2861,6 +2768,7 @@ function initGtdWorkspace() {
         activeGtdComposerQuadrant = '';
         activeGtdEditingTaskId = '';
         activeGtdEditingStepId = stepId;
+        activeGtdEditingQuadrantKey = '';
         await renderGtdWorkspace();
       } catch (err) {
         console.error('[tab-out] GTD step edit failed:', err);
@@ -2872,13 +2780,14 @@ function initGtdWorkspace() {
     const quadrantEl = e.target.closest('.gtd-quadrant[data-gtd-action="prompt-add-task"]');
     if (!quadrantEl) return;
 
-    if (e.target.closest('.gtd-task-item, .gtd-task-main, .gtd-task-checkbox, .gtd-task-delete, .gtd-inline-form, .gtd-task-edit-form')) {
+    if (e.target.closest('.gtd-task-item, .gtd-task-main, .gtd-task-checkbox, .gtd-task-delete, .gtd-inline-form, .gtd-task-edit-form, .gtd-quadrant-title-edit-form')) {
       return;
     }
 
     try {
       activeGtdEditingTaskId = '';
       activeGtdEditingStepId = '';
+      activeGtdEditingQuadrantKey = '';
       activeGtdComposerQuadrant = quadrantEl.dataset.quadrant || '';
       clearPomodoroToggleTimer();
       await renderGtdWorkspace();
@@ -2886,6 +2795,18 @@ function initGtdWorkspace() {
       console.error('[tab-out] GTD double click failed:', err);
       showToast('打开任务输入框失败');
     }
+  });
+
+  root.addEventListener('mousedown', (e) => {
+    const divider = e.target.closest('.gtd-panel-divider');
+    // 只响应分隔条空白区域的拖拽，折叠按钮仍走点击逻辑
+    if (!divider || e.target.closest('[data-gtd-action="toggle-gtd-detail"]')) return;
+    if (divider.classList.contains('is-collapsed')) return;
+
+    const row = divider.closest('.gtd-main-row');
+    if (!row) return;
+    e.preventDefault();
+    beginGtdDividerDrag(row, e.clientX);
   });
 
   root.addEventListener('keydown', async (e) => {
@@ -2902,6 +2823,12 @@ function initGtdWorkspace() {
       }
       if (form.dataset.gtdForm === 'edit-step') {
         activeGtdEditingStepId = '';
+      }
+      if (form.dataset.gtdForm === 'add-batch-steps') {
+        activeGtdBatchStepTaskId = '';
+      }
+      if (form.dataset.gtdForm === 'edit-quadrant-title') {
+        activeGtdEditingQuadrantKey = '';
       }
       await renderGtdWorkspace();
     }
@@ -2935,6 +2862,18 @@ function initGtdWorkspace() {
     if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return;
 
     const form = textarea.closest('form[data-memo-form="add-memo"]');
+    if (!form) return;
+
+    e.preventDefault();
+    form.requestSubmit();
+  });
+
+  root.addEventListener('keydown', (e) => {
+    const textarea = e.target.closest('textarea[name="batchText"]');
+    if (!textarea) return;
+    if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return;
+
+    const form = textarea.closest('form[data-gtd-form="add-batch-steps"]');
     if (!form) return;
 
     e.preventDefault();
@@ -2979,62 +2918,28 @@ function initGtdWorkspace() {
   });
 }
 
-/* -- Reuse checklist dialog -- */
-document.addEventListener('click', async (e) => {
-  const dialog = document.getElementById('reuseDialog');
-  if (!dialog || dialog.style.display === 'none') return;
+/* ----------------------------------------------------------------
+   GTD DIALOGS — Delegated to TabOutGTDDialogs
+   ---------------------------------------------------------------- */
+async function openReuseDialog(taskId) {
+  if (window.TabOutGTDDialogs) return window.TabOutGTDDialogs.openReuseDialog(taskId);
+}
 
-  // Click outside dialog box closes it
-  if (e.target === dialog) {
-    dialog.style.display = 'none';
-    return;
-  }
+function closeReuseDialog() {
+  if (window.TabOutGTDDialogs) return window.TabOutGTDDialogs.closeReuseDialog();
+}
 
-  const actionEl = e.target.closest('[data-gtd-action="close-reuse-dialog"], [data-gtd-action="apply-saved-checklist"]');
-  if (!actionEl) return;
-  const action = actionEl.dataset.gtdAction;
+async function openGtdArchiveDialog() {
+  if (window.TabOutGTDDialogs) return window.TabOutGTDDialogs.openGtdArchiveDialog();
+}
 
-  if (action === 'close-reuse-dialog') {
-    const dialog = document.getElementById('reuseDialog');
-    if (dialog) dialog.style.display = 'none';
-    return;
-  }
+function closeGtdArchiveDialog() {
+  if (window.TabOutGTDDialogs) return window.TabOutGTDDialogs.closeGtdArchiveDialog();
+}
 
-  if (action === 'apply-saved-checklist') {
-    const dialog = document.getElementById('reuseDialog');
-    const storage = getGtdStorage();
-    const saved = await window.TabOutGTD.getSavedChecklists(storage);
-    const entry = saved.find((item) => item.id === actionEl.dataset.checklistId);
-    if (!entry) return;
-
-    const taskId = dialog?.dataset.targetTaskId || '';
-    if (taskId && entry.items.length) {
-      await updateGtdBoard((board) => {
-        let result = board;
-        for (const item of entry.items) {
-          result = window.TabOutGTD.addChecklistItem(result, taskId, item.text);
-        }
-        return result;
-      });
-      showToast(`已导入 ${entry.items.length} 步`);
-    }
-
-    dialog.style.display = 'none';
-  }
-});
-
-document.addEventListener('keyup', (e) => {
-  const search = e.target.closest('#reuseSearch');
-  if (!search) return;
-  const list = document.getElementById('reuseList');
-  if (!list) return;
-  clearTimeout(search._searchTimer);
-  search._searchTimer = setTimeout(async () => {
-    const storage = getGtdStorage();
-    const saved = await window.TabOutGTD.getSavedChecklists(storage);
-    renderReuseList(list, saved, search.value);
-  }, 150);
-});
+async function refreshGtdArchiveList(query = '') {
+  if (window.TabOutGTDDialogs) return window.TabOutGTDDialogs.refreshGtdArchiveList(query);
+}
 
 /* ----------------------------------------------------------------
    EVENT HANDLERS — using event delegation
@@ -3339,6 +3244,21 @@ document.addEventListener('input', async (e) => {
 });
 
 
+// Tab drag support: allows dragging open tabs from cards onto GTD quick links bar
+document.addEventListener('dragstart', (e) => {
+  const chip = e.target.closest('.page-chip[data-tab-url]');
+  if (!chip) return;
+  const url = chip.dataset.tabUrl;
+  const title = chip.dataset.tabTitle || chip.querySelector('.chip-text')?.textContent || url;
+  if (e.dataTransfer && url) {
+    e.dataTransfer.effectAllowed = 'copyMove';
+    e.dataTransfer.setData('application/tabout-tab', JSON.stringify({ url, title }));
+    e.dataTransfer.setData('application/json', JSON.stringify({ url, title }));
+    e.dataTransfer.setData('text/plain', url);
+    e.dataTransfer.setData('text/uri-list', url);
+  }
+});
+
 /* ----------------------------------------------------------------
    INITIALIZE
    ---------------------------------------------------------------- */
@@ -3348,7 +3268,53 @@ async function initializeDashboard() {
   initAssetFallbacks();
   initGtdWorkspace();
   initDynamicBackground();
-  await loadPomodoroState();
+  if (window.TabOutQuickLinks?.init) {
+    window.TabOutQuickLinks.init({
+      getStorage: getGtdStorage,
+      refresh: renderGtdWorkspace,
+      showToast,
+    });
+  }
+  if (window.TabOutGTDDialogs?.init) {
+    window.TabOutGTDDialogs.init({
+      getStorage: getGtdStorage,
+      updateBoard: updateGtdBoard,
+      renderWorkspace: renderGtdWorkspace,
+      showToast,
+      getActiveScope: () => uiPrefs.activeGtdScope || 'day',
+    });
+  }
+  if (window.TabOutPomodoro?.init) {
+    await window.TabOutPomodoro.init({
+      storage: getGtdStorage(),
+      onUpdate: (state) => {
+        pomodoroState = state;
+        renderGtdWorkspace({ preserveActiveField: true });
+      },
+      onComplete: () => {
+        shootConfetti(window.innerWidth * 0.72, Math.max(120, window.innerHeight * 0.24));
+      },
+      showToast,
+    });
+  }
+  if (window.TabOutDeferredTabs?.init) {
+    await window.TabOutDeferredTabs.init({
+      storage: typeof chrome !== 'undefined' && chrome?.storage?.local ? chrome.storage.local : getGtdStorage(),
+    });
+  }
+  if (window.TabOutAI?.init) {
+    await window.TabOutAI.init({
+      storage: getGtdStorage(),
+      refreshGtd: renderGtdWorkspace,
+      getActiveScope: () => uiPrefs.activeGtdScope || 'day',
+      showToast,
+    });
+  }
+  if (window.TabOutCodexReset?.init) {
+    window.TabOutCodexReset.init({
+      storage: getGtdStorage(),
+    });
+  }
   scheduleHeaderEncouragementRotation();
   await renderDashboard();
 }

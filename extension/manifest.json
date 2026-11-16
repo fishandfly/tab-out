@@ -5,6 +5,8 @@
   "description": "集成 GTD、Excalidraw 白板、Markdown 笔记、draw.io 结构图与标签管理的新标签页工作台。",
   "permissions": ["tabs", "activeTab", "storage"],
   "host_permissions": [
+    "https://*/*",
+    "http://*/*",
     "https://loremflickr.com/*",
     "https://wallhaven.cc/*",
     "https://*.wallhaven.cc/*"

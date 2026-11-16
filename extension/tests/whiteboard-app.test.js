@@ -36,8 +36,8 @@ test('白板页面源码包含工具栏、Excalidraw 画布与状态脚本接入
   assert.match(indexHtml, /color-scheme" content="light dark"/);
   assert.match(appJsx, /Excalidraw/);
   assert.match(appJsx, /全屏/);
-  assert.match(appJsx, /导入 \.excalidraw/);
-  assert.match(appJsx, /导出 \.excalidraw/);
+  assert.match(appJsx, /导入/);
+  assert.match(appJsx, /导出/);
   assert.match(appJsx, /FALLBACK_TITLE\s*=\s*'白板'/);
   assert.match(appJsx, /onDoubleClick=/);
   assert.match(appJsx, /whiteboard-title-input/);

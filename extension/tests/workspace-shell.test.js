@@ -54,8 +54,9 @@ test('style.css 包含工作台 tab、白板、笔记与结构图嵌入样式', 
   assert.match(styleCss, /\.notes-embed-frame\s*\{/);
   assert.match(styleCss, /\.workspace-panel-structure\s*\{/);
   assert.match(styleCss, /\.structureboard-embed-frame\s*\{/);
-  assert.match(styleCss, /color-scheme:\s*light dark;/);
-  assert.match(styleCss, /@media\s*\(prefers-color-scheme:\s*dark\)/);
+  assert.match(styleCss, /color-scheme:\s*dark;/);
+  assert.match(styleCss, /--ink:\s*#e7edf5;/);
+  assert.match(styleCss, /--bg-base:\s*linear-gradient\(180deg,\s*#0f1724/);
 });
 
 test('style.css 让标题区透明，并为心灵鸡汤文字提供白字黑影与居中对齐', () => {
@@ -73,13 +74,9 @@ test('style.css 让标题区透明，并为心灵鸡汤文字提供白字黑影�
   assert.doesNotMatch(styleCss, /body\.has-background-photo header\s*\{/);
 });
 
-test('style.css 为 GTD 导入导出按钮提供独立的暗色模式样式，避免浅底白字', () => {
+test('style.css 为 GTD 导入导出按钮提供独立的暗色模式样式（默认深色）', () => {
   const styleCss = readExtensionFile('style.css');
-  const darkModeBlock = styleCss.match(/@media\s*\(prefers-color-scheme:\s*dark\)\s*\{[\s\S]*\}\s*$/)?.[0] || '';
 
-  assert.ok(darkModeBlock, '应该能找到暗色模式样式块');
-  assert.match(darkModeBlock, /\.gtd-header-btn\s*\{/);
-  assert.match(darkModeBlock, /\.gtd-header-btn\s*\{[\s\S]*background:/);
-  assert.match(darkModeBlock, /\.gtd-header-btn\s*\{[\s\S]*color:\s*#?[a-zA-Z0-9(),.\s%-]+;/);
-  assert.doesNotMatch(darkModeBlock, /\.gtd-header-btn\s*\{[\s\S]*background:\s*var\(--ink\)/);
+  assert.match(styleCss, /\.gtd-header-btn\s*\{[\s\S]*?background:\s*linear-gradient/);
+  assert.match(styleCss, /\.gtd-header-btn\s*\{[\s\S]*?color:\s*(#[a-fA-F0-9]+|rgba?\([^)]+\))/);
 });

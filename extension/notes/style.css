@@ -188,8 +188,16 @@ input {
   color: white;
 }
 
+.notes-body {
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+}
+
 .notes-editor-shell {
   min-height: 0;
+  flex: 1;
+  min-width: 0;
   display: grid;
   grid-template-rows: auto 1fr;
   border-radius: 24px;
@@ -197,6 +205,99 @@ input {
   background: rgba(255, 253, 249, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.28);
   box-shadow: 0 22px 46px rgba(26, 22, 19, 0.1);
+}
+
+.notes-toc-panel {
+  width: 180px;
+  min-width: 0;
+  padding: 12px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 18px;
+  background: rgba(255, 252, 248, 0.74);
+  box-shadow: 0 16px 36px rgba(26, 22, 19, 0.08);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  overflow-y: auto;
+}
+
+.notes-toc-empty {
+  color: #7d7067;
+  font-size: 13px;
+  text-align: center;
+  padding: 14px 8px;
+}
+
+.notes-toc-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #3d342d;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.12s ease;
+}
+
+.notes-toc-item:hover {
+  background: rgba(70, 58, 49, 0.08);
+}
+
+.notes-toc-item:focus-visible {
+  outline: 2px solid rgba(86, 116, 155, 0.38);
+  outline-offset: 1px;
+}
+
+.notes-tabbar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 8px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 252, 248, 0.74);
+  box-shadow: 0 16px 36px rgba(26, 22, 19, 0.08);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.notes-tab-btn {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 6px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: #3d342d;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+  min-width: 28px;
+  white-space: nowrap;
+}
+
+.notes-tab-btn:hover {
+  background: rgba(70, 58, 49, 0.08);
+}
+
+.notes-tab-btn.is-active {
+  background: rgba(70, 58, 49, 0.14);
+  color: #241d18;
+}
+
+.notes-tab-btn:focus-visible {
+  outline: 2px solid rgba(86, 116, 155, 0.38);
+  outline-offset: 1px;
 }
 
 .notes-editor-toolbar {
@@ -248,6 +349,46 @@ input {
 
 .notes-editor-content h3 {
   font-size: 1.28rem;
+}
+
+/* 自动编号 */
+.notes-editor-content.show-heading-numbers {
+  counter-reset: h1-counter;
+}
+
+.notes-editor-content.show-heading-numbers h1 {
+  counter-increment: h1-counter;
+  counter-reset: h2-counter;
+}
+
+.notes-editor-content.show-heading-numbers h1::before {
+  content: counter(h1-counter) ". ";
+  display: inline;
+  font-weight: inherit;
+  color: inherit;
+}
+
+.notes-editor-content.show-heading-numbers h2 {
+  counter-increment: h2-counter;
+  counter-reset: h3-counter;
+}
+
+.notes-editor-content.show-heading-numbers h2::before {
+  content: counter(h1-counter) "." counter(h2-counter) ". ";
+  display: inline;
+  font-weight: inherit;
+  color: inherit;
+}
+
+.notes-editor-content.show-heading-numbers h3 {
+  counter-increment: h3-counter;
+}
+
+.notes-editor-content.show-heading-numbers h3::before {
+  content: counter(h1-counter) "." counter(h2-counter) "." counter(h3-counter) ". ";
+  display: inline;
+  font-weight: inherit;
+  color: inherit;
 }
 
 .notes-editor-content p,
@@ -446,6 +587,17 @@ input {
     border-radius: 20px;
   }
 
+  .notes-tabbar {
+    flex-direction: row;
+    padding: 6px 10px;
+  }
+
+  .notes-tab-btn {
+    writing-mode: horizontal-tb;
+    padding: 8px 12px;
+    min-width: 0;
+  }
+
   .notes-editor-content {
     padding: 22px 18px 28px;
   }
@@ -477,6 +629,25 @@ input {
     color: #0f1724;
   }
 
+  .notes-tabbar {
+    border-color: rgba(148, 163, 184, 0.18);
+    background: rgba(16, 23, 33, 0.78);
+    box-shadow: 0 18px 38px rgba(0, 0, 0, 0.34);
+  }
+
+  .notes-tab-btn {
+    color: rgba(226, 232, 240, 0.82);
+  }
+
+  .notes-tab-btn:hover {
+    background: rgba(148, 163, 184, 0.12);
+  }
+
+  .notes-tab-btn.is-active {
+    background: rgba(100, 149, 237, 0.18);
+    color: #f8fafc;
+  }
+
   .notes-editor-shell {
     background: rgba(10, 15, 22, 0.92);
     border-color: rgba(148, 163, 184, 0.16);
@@ -499,6 +670,24 @@ input {
   .notes-editor-btn[aria-pressed="true"]:not(:disabled) {
     background: rgba(100, 149, 237, 0.18);
     color: #f8fafc;
+  }
+
+  .notes-toc-panel {
+    border-color: rgba(148, 163, 184, 0.18);
+    background: rgba(16, 23, 33, 0.78);
+    box-shadow: 0 18px 38px rgba(0, 0, 0, 0.34);
+  }
+
+  .notes-toc-item {
+    color: rgba(226, 232, 240, 0.82);
+  }
+
+  .notes-toc-item:hover {
+    background: rgba(148, 163, 184, 0.12);
+  }
+
+  .notes-toc-empty {
+    color: rgba(226, 232, 240, 0.6);
   }
 
   .notes-editor-content {
