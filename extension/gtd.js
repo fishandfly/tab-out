@@ -1265,6 +1265,256 @@
     return nextBoard;
   }
 
+  async function recoverTaskChecklistFromHistory(storage, currentBoard, targetTaskIdOrTitle = '') {
+    if (!currentBoard || !Array.isArray(currentBoard.tasks)) {
+      return { success: false, count: 0, details: [], board: currentBoard };
+    }
+
+    const cleanText = (str) => {
+      if (typeof str !== 'string') return '';
+      return str
+        .trim()
+        .toLowerCase()
+        .replace(/^[0-9]+[.\u3001\uff0e\s\-]+/, '')
+        .replace(/\s+/g, '');
+    };
+
+    let targetTasks = [];
+    if (targetTaskIdOrTitle && targetTaskIdOrTitle !== 'all') {
+      const targetQuery = cleanText(targetTaskIdOrTitle);
+      const matched = currentBoard.tasks.find((t) =>
+        t.id === targetTaskIdOrTitle ||
+        (t.title && cleanText(t.title) === targetQuery)
+      );
+      if (matched) {
+        targetTasks = [matched];
+      }
+    } else {
+      targetTasks = currentBoard.tasks.filter((t) =>
+        Array.isArray(t.checklist) && t.checklist.some((item) => !item.completed)
+      );
+    }
+
+    if (!targetTasks.length) {
+      return { success: true, count: 0, details: [], board: currentBoard };
+    }
+
+    const boards = await getBoards(storage);
+    const candidateBoards = [];
+
+    // 1. Current board archived tasks
+    const currentArchived = currentBoard.tasks.filter((t) => t.archived);
+    if (currentArchived.length) {
+      candidateBoards.push({
+        source: 'current-archived',
+        board: { tasks: currentArchived },
+      });
+    }
+
+    // 2. Historical boards in storage
+    const boardKeys = Object.keys(boards).filter((k) => k !== currentBoard.date);
+    boardKeys.sort().reverse();
+    for (const k of boardKeys) {
+      if (boards[k] && Array.isArray(boards[k].tasks)) {
+        candidateBoards.push({
+          source: `board:${k}`,
+          board: boards[k],
+        });
+      }
+    }
+
+    // 3. Backups in IndexedDB (if runtime supports it)
+    if (typeof indexedDB !== 'undefined' && typeof JSZip !== 'undefined') {
+      try {
+        const backupEntries = await new Promise((resolve) => {
+          const req = indexedDB.open('TabOutBackups', 1);
+          req.onsuccess = () => {
+            const db = req.result;
+            try {
+              const tx = db.transaction('backups', 'readonly');
+              const store = tx.objectStore('backups');
+              const getReq = store.getAll();
+              getReq.onsuccess = () => {
+                db.close();
+                resolve(getReq.result || []);
+              };
+              getReq.onerror = () => {
+                db.close();
+                resolve([]);
+              };
+            } catch (_) {
+              db.close();
+              resolve([]);
+            }
+          };
+          req.onerror = () => resolve([]);
+        });
+
+        backupEntries.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+        for (const entry of backupEntries) {
+          if (!entry.blob) continue;
+          try {
+            const zip = await JSZip.loadAsync(entry.blob);
+            const gtdJsonFile = zip.file('gtdBoards.json');
+            if (gtdJsonFile) {
+              const jsonStr = await gtdJsonFile.async('string');
+              const parsed = JSON.parse(jsonStr);
+              if (parsed && typeof parsed === 'object') {
+                Object.keys(parsed).forEach((k) => {
+                  if (parsed[k] && Array.isArray(parsed[k].tasks)) {
+                    candidateBoards.push({
+                      source: `backup:${entry.date}:${k}`,
+                      board: parsed[k],
+                    });
+                  }
+                });
+              }
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+
+    // 4. Saved checklist templates
+    try {
+      const saved = await getSavedChecklists(storage);
+      if (Array.isArray(saved) && saved.length > 0) {
+        candidateBoards.push({
+          source: 'saved-checklists',
+          savedTemplates: saved,
+        });
+      }
+    } catch (_) {}
+
+    let totalRecoveredCount = 0;
+    const recoveredDetails = [];
+
+    const nextTasks = currentBoard.tasks.map((task) => {
+      const isTarget = targetTasks.some((t) => t.id === task.id);
+      if (!isTarget || !Array.isArray(task.checklist) || !task.checklist.length) {
+        return task;
+      }
+
+      const taskTitleClean = cleanText(task.title);
+      let recoveredInTask = 0;
+
+      const nextChecklist = task.checklist.map((item) => {
+        if (item.completed) return item;
+
+        const itemTextClean = cleanText(item.text);
+        const itemId = item.id;
+
+        for (const candidate of candidateBoards) {
+          if (candidate.board && Array.isArray(candidate.board.tasks)) {
+            for (const histTask of candidate.board.tasks) {
+              const histTitleClean = cleanText(histTask.title);
+              const titleMatches = histTask.id === task.id ||
+                histTitleClean === taskTitleClean ||
+                (histTitleClean && taskTitleClean && (histTitleClean.includes(taskTitleClean) || taskTitleClean.includes(histTitleClean)));
+
+              if (!titleMatches || !Array.isArray(histTask.checklist)) continue;
+
+              const histStep = histTask.checklist.find((hs) => {
+                if (itemId && hs.id === itemId) return true;
+                const hsTextClean = cleanText(hs.text);
+                return (itemTextClean && hsTextClean && (hsTextClean === itemTextClean || hsTextClean.includes(itemTextClean) || itemTextClean.includes(hsTextClean)));
+              });
+
+              if (histStep && (histStep.completed || histStep.status === 'done')) {
+                recoveredInTask++;
+                totalRecoveredCount++;
+                recoveredDetails.push({
+                  taskId: task.id,
+                  taskTitle: task.title,
+                  stepId: item.id,
+                  stepText: item.text,
+                  source: candidate.source,
+                  completedAt: histStep.completedAt,
+                });
+                return {
+                  ...item,
+                  completed: true,
+                  status: 'done',
+                  completedAt: histStep.completedAt || nowIso(),
+                  emoji: item.emoji || histStep.emoji || '',
+                };
+              }
+            }
+          } else if (candidate.savedTemplates && Array.isArray(candidate.savedTemplates)) {
+            for (const tmpl of candidate.savedTemplates) {
+              const tmplTitleClean = cleanText(tmpl.taskTitle || tmpl.name);
+              const titleMatches = tmplTitleClean === taskTitleClean ||
+                (tmplTitleClean && taskTitleClean && (tmplTitleClean.includes(taskTitleClean) || taskTitleClean.includes(tmplTitleClean)));
+
+              if (!titleMatches || !Array.isArray(tmpl.items)) continue;
+
+              const histStep = tmpl.items.find((hs) => {
+                if (itemId && hs.id === itemId) return true;
+                const hsTextClean = cleanText(hs.text);
+                return (itemTextClean && hsTextClean && (hsTextClean === itemTextClean || hsTextClean.includes(itemTextClean) || itemTextClean.includes(hsTextClean)));
+              });
+
+              if (histStep && (histStep.completed || histStep.status === 'done')) {
+                recoveredInTask++;
+                totalRecoveredCount++;
+                recoveredDetails.push({
+                  taskId: task.id,
+                  taskTitle: task.title,
+                  stepId: item.id,
+                  stepText: item.text,
+                  source: 'saved-template',
+                  completedAt: histStep.completedAt,
+                });
+                return {
+                  ...item,
+                  completed: true,
+                  status: 'done',
+                  completedAt: histStep.completedAt || nowIso(),
+                  emoji: item.emoji || histStep.emoji || '',
+                };
+              }
+            }
+          }
+        }
+
+        return item;
+      });
+
+      if (recoveredInTask > 0) {
+        return normalizeTask({
+          ...task,
+          checklist: nextChecklist,
+        });
+      }
+
+      return task;
+    });
+
+    if (totalRecoveredCount > 0) {
+      const nextBoard = normalizeBoard({
+        ...currentBoard,
+        tasks: nextTasks,
+        updatedAt: nowIso(),
+      }, currentBoard.date);
+
+      await saveBoard(storage, nextBoard);
+      return {
+        success: true,
+        count: totalRecoveredCount,
+        details: recoveredDetails,
+        board: nextBoard,
+      };
+    }
+
+    return {
+      success: true,
+      count: 0,
+      details: [],
+      board: currentBoard,
+    };
+  }
+
   function renderArchiveList(archivedTasks = [], options = {}) {
     const query = typeof options.query === 'string' ? options.query.trim() : '';
     const quadrantConfig = normalizeQuadrantConfig(options.quadrantConfig);
@@ -1761,7 +2011,10 @@
               <h3>${escapeHtml(selectedTask.title)}</h3>
               ${renderQuadrantRibbon(selectedTask.quadrant, titleConfig)}
             </div>
-            ${hasItems ? `<button class="gtd-detail-save-checklist" type="button" data-gtd-action="save-checklist" data-task-id="${selectedTask.id}" title="保存 checklist 以便复用">保存 checklist</button>` : ''}
+            <div class="gtd-detail-actions">
+              ${hasItems ? `<button class="gtd-detail-save-checklist" type="button" data-gtd-action="save-checklist" data-task-id="${selectedTask.id}" title="保存 checklist 以便复用">保存 checklist</button>` : ''}
+              ${hasItems ? `<button class="gtd-detail-recover-checklist" type="button" data-gtd-action="recover-checklist-history" data-task-id="${selectedTask.id}" title="根据历史看板与备份恢复已完成步骤">从历史恢复</button>` : ''}
+            </div>
           </div>
           ${renderPomodoroTrack(selectedTask, pomodoro)}
         </div>
@@ -1773,6 +2026,7 @@
           <input type="text" name="text" placeholder="添加一个执行步骤..." autocomplete="off">
           <button type="submit">添加</button>
           <button class="gtd-step-reuse-btn" type="button" data-gtd-action="open-reuse-checklist" data-task-id="${selectedTask.id}" title="从已保存的 checklist 中导入">复用</button>
+          <button class="gtd-step-reuse-btn" type="button" data-gtd-action="recover-checklist-history" data-task-id="${selectedTask.id}" title="根据历史看板与备份恢复已完成步骤">历史恢复</button>
           <button class="gtd-step-reuse-btn${options.batchStepTaskId === selectedTask.id ? ' is-active' : ''}" type="button" data-gtd-action="toggle-batch-steps" data-task-id="${selectedTask.id}" title="按折行批量添加步骤">批量</button>
         </form>
         ${renderBatchStepPanel(selectedTask, options)}
@@ -2386,6 +2640,7 @@
     getSelectedTask,
     getTaskProgress,
     getQuadrantTasks,
+    getBoards,
     getTodayBoard,
     saveBoard,
     updateTodayBoard,
@@ -2396,6 +2651,7 @@
     getSavedChecklists,
     saveSavedChecklist,
     deleteSavedChecklist,
+    recoverTaskChecklistFromHistory,
     QUICK_LINKS_KEY,
     DEFAULT_QUICK_LINKS_PARTITION_ID,
     DEFAULT_QUICK_LINKS_PARTITION_NAME,

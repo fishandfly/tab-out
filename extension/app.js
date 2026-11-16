@@ -2687,6 +2687,24 @@ function initGtdWorkspace() {
         await openReuseDialog(taskId);
         return;
       }
+
+      if (action === 'recover-checklist-history') {
+        const taskId = actionEl.dataset.taskId;
+        const storage = getGtdStorage();
+        const scopeMeta = window.TabOutGTD?.getBoardScope ? window.TabOutGTD.getBoardScope(new Date()) : null;
+        const scopeInfo = scopeMeta ? scopeMeta[uiPrefs.activeGtdScope || 'day'] : null;
+        const scopeKey = scopeInfo?.key || new Date().toISOString().slice(0, 10);
+        const currentBoard = await window.TabOutGTD.getScopeBoard(storage, scopeKey);
+        showToast('正在比对历史数据恢复...');
+        const res = await window.TabOutGTD.recoverTaskChecklistFromHistory(storage, currentBoard, taskId || 'all');
+        if (res && res.count > 0) {
+          await renderGtdWorkspace();
+          showToast(`成功根据历史数据恢复 ${res.count} 个已完成步骤！`);
+        } else {
+          showToast('历史数据中未发现更多已完成步骤');
+        }
+        return;
+      }
     } catch (err) {
       console.error('[tab-out] GTD click failed:', err);
       showToast('处理 GTD 操作失败');
@@ -3316,6 +3334,28 @@ async function initializeDashboard() {
     });
   }
   scheduleHeaderEncouragementRotation();
+
+  // 自动从历史数据与备份中比对恢复步骤完成状态（防止历史拖拽 bug 造成的步骤完成态丢失）
+  try {
+    const recoveryFlagKey = 'tab-out-checklist-recovery-executed-v1';
+    const storage = getGtdStorage();
+    const flagObj = await storage.get(recoveryFlagKey);
+    if (!flagObj || !flagObj[recoveryFlagKey]) {
+      const scopeMeta = window.TabOutGTD?.getBoardScope ? window.TabOutGTD.getBoardScope(new Date()) : null;
+      const todayKey = scopeMeta?.day?.key || new Date().toISOString().slice(0, 10);
+      if (window.TabOutGTD?.getScopeBoard && window.TabOutGTD?.recoverTaskChecklistFromHistory) {
+        const currentBoard = await window.TabOutGTD.getScopeBoard(storage, todayKey);
+        const res = await window.TabOutGTD.recoverTaskChecklistFromHistory(storage, currentBoard);
+        if (res && res.count > 0) {
+          showToast(`已根据历史数据恢复 ${res.count} 个已完成步骤`);
+        }
+      }
+      await storage.set({ [recoveryFlagKey]: true });
+    }
+  } catch (err) {
+    console.warn('[tab-out] Auto checklist history recovery warning:', err);
+  }
+
   await renderDashboard();
 }
 

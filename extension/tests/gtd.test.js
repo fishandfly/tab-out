@@ -71,6 +71,10 @@ const {
   removeQuickLinksPartition,
   renameQuickLinksPartition,
   renderQuickLinksBar,
+  recoverTaskChecklistFromHistory,
+  saveBoard,
+  getBoards,
+  saveSavedChecklist,
 } = require('../gtd.js');
 
 test('createEmptyBoard 为当天创建四象限空白工作板', () => {
@@ -1494,6 +1498,96 @@ test('Kanban 视图中拖拽任务至「今日计划」仅流转未完成步骤�
   assert.match(checklistHtml, /2\/3 步已完成/);
   assert.match(checklistHtml, /class="gtd-completed-section gtd-step-completed-section"/);
   assert.match(checklistHtml, /已完成步骤 \(2\)/);
+});
+
+test('recoverTaskChecklistFromHistory 能够精准比对历史看板并恢复 checklist 已完成步骤与时间戳', async () => {
+  const storage = createMockStorage();
+
+  // 1. 模拟历史看板 2026-11-15：包含“长春市一张图开发”，部分步骤已完成
+  let histBoard = addTask(createEmptyBoard('2026-11-15'), 'importantUrgent', '长春市一张图开发');
+  const histTaskId = histBoard.tasks[0].id;
+  histBoard = addChecklistItem(histBoard, histTaskId, '冬季房顶的雪去掉');
+  histBoard = addChecklistItem(histBoard, histTaskId, 'onemap改进');
+  histBoard = addChecklistItem(histBoard, histTaskId, '提升精模的3dtiles分辨率');
+  histBoard = addChecklistItem(histBoard, histTaskId, '大华视频接入，使用go网关');
+
+  const histTask = histBoard.tasks[0];
+  const step0Id = histTask.checklist[0].id;
+  const step1Id = histTask.checklist[1].id;
+  const step3Id = histTask.checklist[3].id;
+
+  // 历史中已完成第 0、1、3 步
+  histBoard = toggleChecklistItemCompleted(histBoard, histTaskId, step0Id, true);
+  histBoard = toggleChecklistItemCompleted(histBoard, histTaskId, step1Id, true);
+  histBoard = toggleChecklistItemCompleted(histBoard, histTaskId, step3Id, true);
+
+  // 保存历史看板
+  await saveBoard(storage, histBoard);
+
+  // 2. 模拟今日看板 2026-11-16：由于拖拽 bug，步骤全部被错误置为未完成 (completed: false)
+  let todayBoard = addTask(createEmptyBoard('2026-11-16'), 'importantUrgent', '长春市一张图开发');
+  const todayTaskId = todayBoard.tasks[0].id;
+  todayBoard = addChecklistItem(todayBoard, todayTaskId, '冬季房顶的雪去掉');
+  todayBoard = addChecklistItem(todayBoard, todayTaskId, 'onemap改进');
+  todayBoard = addChecklistItem(todayBoard, todayTaskId, '提升精模的3dtiles分辨率');
+  todayBoard = addChecklistItem(todayBoard, todayTaskId, '大华视频接入，使用go网关');
+
+  // 保存今日异常看板
+  await saveBoard(storage, todayBoard);
+
+  // 3. 执行历史恢复
+  const result = await recoverTaskChecklistFromHistory(storage, todayBoard, todayTaskId);
+
+  assert.equal(result.success, true);
+  assert.equal(result.count, 3, '应当成功恢复 3 个历史已完成步骤');
+  assert.equal(result.board.tasks[0].checklist[0].completed, true);
+  assert.equal(result.board.tasks[0].checklist[1].completed, true);
+  assert.equal(result.board.tasks[0].checklist[2].completed, false);
+  assert.equal(result.board.tasks[0].checklist[3].completed, true);
+
+  // 验证时间戳与 status: 'done' 被正确设置
+  assert.equal(result.board.tasks[0].checklist[0].status, 'done');
+  assert.ok(result.board.tasks[0].checklist[0].completedAt);
+
+  // 验证已经持久化写入了 storage
+  const savedBoards = await getBoards(storage);
+  const reloadedToday = savedBoards['2026-11-16'];
+  assert.equal(reloadedToday.tasks[0].checklist.filter(i => i.completed).length, 3);
+});
+
+test('recoverTaskChecklistFromHistory 支持跨多天历史看板恢复，且不覆盖今日已有完成状态与时间戳', async () => {
+  const storage = createMockStorage();
+
+  // 1. 模拟更早历史看板 2026-11-14
+  let pastBoard = addTask(createEmptyBoard('2026-11-14'), 'importantUrgent', '生态数据资源平台-进行一次重构');
+  const pastTaskId = pastBoard.tasks[0].id;
+  pastBoard = addChecklistItem(pastBoard, pastTaskId, '去服务中心对接');
+  pastBoard = addChecklistItem(pastBoard, pastTaskId, '完成代码审查');
+  pastBoard = toggleChecklistItemCompleted(pastBoard, pastTaskId, pastBoard.tasks[0].checklist[0].id, true);
+  const pastCompletedAt = pastBoard.tasks[0].checklist[0].completedAt;
+  await saveBoard(storage, pastBoard);
+
+  // 2. 今日看板 2026-11-16：包含该任务，第一步今天完成了，第二步历史上完成过但今天未完成
+  let todayBoard = addTask(createEmptyBoard('2026-11-16'), 'importantUrgent', '生态数据资源平台-进行一次重构');
+  const tId = todayBoard.tasks[0].id;
+  todayBoard = addChecklistItem(todayBoard, tId, '今日新增临时待办');
+  todayBoard = addChecklistItem(todayBoard, tId, '去服务中心对接');
+  // 今日手动完成了第一步
+  todayBoard = toggleChecklistItemCompleted(todayBoard, tId, todayBoard.tasks[0].checklist[0].id, true);
+  const todayStep1CompletedAt = todayBoard.tasks[0].checklist[0].completedAt;
+  await saveBoard(storage, todayBoard);
+
+  // 3. 不传 taskId 执行全看板历史比对恢复
+  const result = await recoverTaskChecklistFromHistory(storage, todayBoard);
+  assert.equal(result.count, 1);
+  const checklist = result.board.tasks[0].checklist;
+  // 原第一步不受影响且时间戳未被修改
+  assert.equal(checklist[0].completed, true);
+  assert.equal(checklist[0].completedAt, todayStep1CompletedAt);
+  // 第二步被成功恢复
+  assert.equal(checklist[1].completed, true);
+  assert.equal(checklist[1].status, 'done');
+  assert.equal(checklist[1].completedAt, pastCompletedAt);
 });
 
 

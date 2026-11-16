@@ -3986,6 +3986,13 @@ body.gtd-divider-dragging {
 }
 
 /* ---- Save checklist button ---- */
+.gtd-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
 .gtd-detail-save-checklist {
   flex-shrink: 0;
   padding: 4px 10px;
@@ -4001,6 +4008,23 @@ body.gtd-divider-dragging {
 .gtd-detail-save-checklist:hover {
   background: rgba(226, 164, 111, 0.1);
   border-color: var(--accent-amber);
+}
+
+.gtd-detail-recover-checklist {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 1px solid rgba(138, 180, 248, 0.35);
+  border-radius: 6px;
+  background: transparent;
+  color: #8ab4f8;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.gtd-detail-recover-checklist:hover {
+  background: rgba(138, 180, 248, 0.12);
+  border-color: #8ab4f8;
 }
 
 /* ---- Reuse button ---- */
