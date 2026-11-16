@@ -525,41 +525,13 @@
     const tasks = normalized.tasks.map((task) => {
       if (task.id !== taskId) return task;
       const taskJustCompleted = isDone && !task.completed;
-      const nextChecklist = task.checklist.map((item) => {
-        if (isDone) {
-          const stepJustCompleted = !item.completed;
-          return normalizeChecklistItem({
-            ...item,
-            status: 'done',
-            completed: true,
-            completedAt: stepJustCompleted ? nowIso() : (item.completedAt || nowIso()),
-          });
-        }
-
-        // 移入未完成泳道（待完成/今日计划/开始工作）时，保留已完成步骤的完成状态与时间
-        if (item.completed || item.status === 'done') {
-          return normalizeChecklistItem({
-            ...item,
-            status: 'done',
-            completed: true,
-            completedAt: item.completedAt || nowIso(),
-          });
-        }
-
-        return normalizeChecklistItem({
-          ...item,
-          status,
-          completed: false,
-          completedAt: '',
-        });
-      });
 
       return normalizeTask({
         ...task,
         status,
         completed: isDone,
         completedAt: isDone ? (taskJustCompleted ? nowIso() : (task.completedAt || nowIso())) : '',
-        checklist: nextChecklist,
+        checklist: task.checklist, // 整体移动任务只改动任务自身泳道状态，绝不改动下面的 checklist 步骤状态！
       });
     });
 
