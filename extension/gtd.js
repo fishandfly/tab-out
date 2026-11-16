@@ -525,13 +525,52 @@
     const tasks = normalized.tasks.map((task) => {
       if (task.id !== taskId) return task;
       const taskJustCompleted = isDone && !task.completed;
+      const taskWasDone = task.status === 'done' || task.completed;
+
+      // 整体移动任务时：把整个任务包括下面的步骤都拖拽过去
+      const nextChecklist = Array.isArray(task.checklist) ? task.checklist.map((item) => {
+        // 1. 拖到「已完成」泳道：整个任务包括其所有子步骤全部标记为完成，归入已完成泳道
+        if (isDone) {
+          const itemJustCompleted = !item.completed;
+          return normalizeChecklistItem({
+            ...item,
+            status: 'done',
+            completed: true,
+            completedAt: item.completed && item.completedAt ? item.completedAt : nowIso(),
+          });
+        }
+
+        // 2. 从「已完成」泳道拖回活跃泳道 (todo / planned / doing)：重新激活任务及步骤
+        if (taskWasDone) {
+          return normalizeChecklistItem({
+            ...item,
+            status,
+            completed: false,
+            completedAt: '',
+          });
+        }
+
+        // 3. 在活跃泳道之间移动 (todo <-> planned <-> doing)：
+        // - 之前已经完成的步骤（已在已完成泳道）：保持已完成状态与时间戳，不改动已完成 checklist 的状态
+        if (item.completed || item.status === 'done') {
+          return item;
+        }
+
+        // - 未完成的步骤：跟随任务整体移动到目标泳道！
+        return normalizeChecklistItem({
+          ...item,
+          status,
+          completed: false,
+          completedAt: '',
+        });
+      }) : [];
 
       return normalizeTask({
         ...task,
         status,
         completed: isDone,
         completedAt: isDone ? (taskJustCompleted ? nowIso() : (task.completedAt || nowIso())) : '',
-        checklist: task.checklist, // 整体移动任务只改动任务自身泳道状态，绝不改动下面的 checklist 步骤状态！
+        checklist: nextChecklist,
       });
     });
 

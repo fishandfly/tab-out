@@ -938,7 +938,7 @@ test('Kanban 状态和表情标准化及 KANBAN_LANES 定义', () => {
   assert.equal(step.emoji, '');
 });
 
-test('updateTaskKanbanStatus 整体拖拽任务只更新任务自身泳道状态，绝不修改 checklist 步骤的状态', () => {
+test('updateTaskKanbanStatus 整体拖拽任务会把任务和未完成步骤一起拖拽过去，且保持已完成步骤的状态', () => {
   let board = addTask(createEmptyBoard('2026-06-01'), 'importantUrgent', '重构模块');
   const taskId = board.tasks[0].id;
   board = addChecklistItems(board, taskId, ['子任务1-未完成', '子任务2-已完成']);
@@ -950,34 +950,45 @@ test('updateTaskKanbanStatus 整体拖拽任务只更新任务自身泳道状态
   assert.equal(board.tasks[0].checklist.find((s) => s.id === step2Id).completed, true);
   assert.equal(board.tasks[0].checklist.find((s) => s.id === step2Id).status, 'done');
 
-  // 1. 拖拽任务至「今日计划」，任务状态变为 planned，所有 checklist 步骤状态完全保持不变！
+  // 1. 拖拽任务至「今日计划」，任务状态变为 planned，未完成步骤跟随移动至 planned，已完成步骤保持完成！
   board = updateTaskKanbanStatus(board, taskId, 'planned');
   assert.equal(board.tasks[0].status, 'planned');
   assert.equal(board.tasks[0].completed, false);
   const plannedStep1 = board.tasks[0].checklist.find((s) => s.id === step1Id);
   const plannedStep2 = board.tasks[0].checklist.find((s) => s.id === step2Id);
-  assert.equal(plannedStep1.status, 'todo'); // 保持原状
+  assert.equal(plannedStep1.status, 'planned'); // 跟随拖拽过去
   assert.equal(plannedStep1.completed, false);
   assert.equal(plannedStep2.status, 'done'); // 保持完成
   assert.equal(plannedStep2.completed, true);
 
-  // 2. 拖拽任务至「开始工作」，任务自身变为 doing，checklist 保持原状
+  // 2. 拖拽任务至「开始工作」，任务自身变为 doing，未完成步骤变为 doing，已完成步骤保持完成
   board = updateTaskKanbanStatus(board, taskId, 'doing');
   assert.equal(board.tasks[0].status, 'doing');
   assert.equal(board.tasks[0].completed, false);
   const doingStep1 = board.tasks[0].checklist.find((s) => s.id === step1Id);
   const doingStep2 = board.tasks[0].checklist.find((s) => s.id === step2Id);
-  assert.equal(doingStep1.status, 'todo');
+  assert.equal(doingStep1.status, 'doing');
   assert.equal(doingStep1.completed, false);
   assert.equal(doingStep2.status, 'done');
   assert.equal(doingStep2.completed, true);
 
-  // 3. 拖拽任务到「已完成」，任务自身标记为完成，checklist 依然保持各自的完成状态
+  // 3. 拖拽任务到「已完成」，整个任务及所有步骤全部标记为完成
   board = updateTaskKanbanStatus(board, taskId, 'done');
   assert.equal(board.tasks[0].status, 'done');
   assert.equal(board.tasks[0].completed, true);
-  assert.equal(board.tasks[0].checklist.find((s) => s.id === step1Id).completed, false);
+  assert.equal(board.tasks[0].checklist.find((s) => s.id === step1Id).status, 'done');
+  assert.equal(board.tasks[0].checklist.find((s) => s.id === step1Id).completed, true);
+  assert.equal(board.tasks[0].checklist.find((s) => s.id === step2Id).status, 'done');
   assert.equal(board.tasks[0].checklist.find((s) => s.id === step2Id).completed, true);
+
+  // 4. 从「已完成」拖拽回「待完成」，任务及步骤重新激活
+  board = updateTaskKanbanStatus(board, taskId, 'todo');
+  assert.equal(board.tasks[0].status, 'todo');
+  assert.equal(board.tasks[0].completed, false);
+  assert.equal(board.tasks[0].checklist.find((s) => s.id === step1Id).status, 'todo');
+  assert.equal(board.tasks[0].checklist.find((s) => s.id === step1Id).completed, false);
+  assert.equal(board.tasks[0].checklist.find((s) => s.id === step2Id).status, 'todo');
+  assert.equal(board.tasks[0].checklist.find((s) => s.id === step2Id).completed, false);
 });
 
 test('updateChecklistItemKanbanStatus 拖拽子任务或孙任务只更新自身状态', () => {
@@ -1453,7 +1464,7 @@ test('Kanban 视图中拖拽任务至「今日计划」仅流转未完成步骤�
     return s;
   });
 
-  // 整体拖拽任务至「今日计划」，只移动任务自身，checklist 各自状态完全不变
+  // 整体拖拽任务至「今日计划」，未完成步骤跟随拖拽至 planned，已完成步骤保留在 done
   board = updateTaskKanbanStatus(board, taskId, 'planned');
   assert.equal(board.tasks[0].status, 'planned');
   assert.equal(board.tasks[0].checklist.find((s) => s.id === step1Id).completed, true);
@@ -1461,10 +1472,6 @@ test('Kanban 视图中拖拽任务至「今日计划」仅流转未完成步骤�
   assert.equal(board.tasks[0].checklist.find((s) => s.id === step2Id).completed, true);
   assert.equal(board.tasks[0].checklist.find((s) => s.id === step2Id).status, 'done');
   assert.equal(board.tasks[0].checklist.find((s) => s.id === step3Id).completed, false);
-  assert.equal(board.tasks[0].checklist.find((s) => s.id === step3Id).status, 'todo');
-
-  // 将未完成的 step3 拖拽至「今日计划」
-  board = updateChecklistItemKanbanStatus(board, taskId, step3Id, 'planned');
   assert.equal(board.tasks[0].checklist.find((s) => s.id === step3Id).status, 'planned');
 
   // 看板渲染：
