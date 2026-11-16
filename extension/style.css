@@ -5937,6 +5937,50 @@ body::before {
     white-space: nowrap;
   }
 
+  .gtd-kanban-completed-section {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(148, 163, 184, 0.18);
+  }
+
+  .gtd-kanban-completed-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: 6px;
+    background: rgba(15, 23, 42, 0.45);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    color: var(--muted, #94a3b8);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+  }
+
+  .gtd-kanban-completed-toggle:hover {
+    background: rgba(15, 23, 42, 0.75);
+    border-color: rgba(148, 163, 184, 0.3);
+    color: #edf4ff;
+  }
+
+  .gtd-kanban-completed-steps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 6px;
+  }
+
+  .gtd-kanban-completed-steps-list.is-collapsed {
+    display: none !important;
+  }
+
+  .gtd-kanban-completed-steps-list.is-expanded {
+    display: flex !important;
+  }
+
   .is-kanban-dragging {
     opacity: 0.35;
     transform: scale(0.97);

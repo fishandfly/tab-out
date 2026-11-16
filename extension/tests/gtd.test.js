@@ -934,47 +934,45 @@ test('Kanban 状态和表情标准化及 KANBAN_LANES 定义', () => {
   assert.equal(step.emoji, '');
 });
 
-test('updateTaskKanbanStatus 拖拽任务至已完成会把整个任务及子孙任务全部完成', () => {
+test('updateTaskKanbanStatus 拖拽任务至已完成会把整个任务及子孙任务全部完成，拖拽至未完成泳道会保留已完成步骤', () => {
   let board = addTask(createEmptyBoard('2026-06-01'), 'importantUrgent', '重构模块');
   const taskId = board.tasks[0].id;
-  board = addChecklistItems(board, taskId, ['子任务1', '子任务2']);
-  board = moveChecklistItem(board, taskId, board.tasks[0].checklist[1].id, board.tasks[0].checklist[0].id, {
-    position: 'after',
-    desiredLevel: 1, // 孙任务
-  });
+  board = addChecklistItems(board, taskId, ['子任务1-未完成', '子任务2-已完成']);
+  const step1Id = board.tasks[0].checklist[0].id;
+  const step2Id = board.tasks[0].checklist[1].id;
 
-  // 1. 拖拽整个任务到已完成
-  board = updateTaskKanbanStatus(board, taskId, 'done');
-  assert.equal(board.tasks[0].status, 'done');
-  assert.equal(board.tasks[0].completed, true);
-  // 所有子任务和孙任务也必须全部标记为完成
-  assert.equal(board.tasks[0].checklist[0].status, 'done');
-  assert.equal(board.tasks[0].checklist[0].completed, true);
-  assert.equal(board.tasks[0].checklist[1].status, 'done');
-  assert.equal(board.tasks[0].checklist[1].completed, true);
+  // 先把 子任务2 标记为完成
+  board = toggleChecklistItemCompleted(board, taskId, step2Id, true);
+  assert.equal(board.tasks[0].checklist.find((s) => s.id === step2Id).completed, true);
+  assert.equal(board.tasks[0].checklist.find((s) => s.id === step2Id).status, 'done');
 
-  // 2. 拖拽任务至开始工作，任务及所有子孙步骤一并流转至开始工作
-  board = updateTaskKanbanStatus(board, taskId, 'doing');
-  assert.equal(board.tasks[0].status, 'doing');
-  assert.equal(board.tasks[0].completed, false);
-  assert.equal(board.tasks[0].checklist[0].status, 'doing');
-  assert.equal(board.tasks[0].checklist[0].completed, false);
-  assert.equal(board.tasks[0].checklist[1].status, 'doing');
-  assert.equal(board.tasks[0].checklist[1].completed, false);
-
-  // 3. 拖拽任务至今日计划，任务及所有子孙步骤一并流转至今日计划
+  // 1. 拖拽任务至「今日计划」，未完成步骤流转至今日计划，已完成步骤依然保持已完成状态
   board = updateTaskKanbanStatus(board, taskId, 'planned');
   assert.equal(board.tasks[0].status, 'planned');
   assert.equal(board.tasks[0].completed, false);
-  assert.equal(board.tasks[0].checklist[0].status, 'planned');
-  assert.equal(board.tasks[0].checklist[1].status, 'planned');
+  const plannedStep1 = board.tasks[0].checklist.find((s) => s.id === step1Id);
+  const plannedStep2 = board.tasks[0].checklist.find((s) => s.id === step2Id);
+  assert.equal(plannedStep1.status, 'planned');
+  assert.equal(plannedStep1.completed, false);
+  assert.equal(plannedStep2.status, 'done');
+  assert.equal(plannedStep2.completed, true);
 
-  // 4. 拖拽任务回到待完成，任务及所有子孙步骤一并流转回待完成
-  board = updateTaskKanbanStatus(board, taskId, 'todo');
-  assert.equal(board.tasks[0].status, 'todo');
+  // 2. 拖拽任务至「开始工作」，未完成步骤流转至开始工作，已完成步骤依然保持完成
+  board = updateTaskKanbanStatus(board, taskId, 'doing');
+  assert.equal(board.tasks[0].status, 'doing');
   assert.equal(board.tasks[0].completed, false);
-  assert.equal(board.tasks[0].checklist[0].status, 'todo');
-  assert.equal(board.tasks[0].checklist[1].status, 'todo');
+  const doingStep1 = board.tasks[0].checklist.find((s) => s.id === step1Id);
+  const doingStep2 = board.tasks[0].checklist.find((s) => s.id === step2Id);
+  assert.equal(doingStep1.status, 'doing');
+  assert.equal(doingStep1.completed, false);
+  assert.equal(doingStep2.status, 'done');
+  assert.equal(doingStep2.completed, true);
+
+  // 3. 拖拽整个任务到「已完成」，任务与所有步骤全部标记为完成
+  board = updateTaskKanbanStatus(board, taskId, 'done');
+  assert.equal(board.tasks[0].status, 'done');
+  assert.equal(board.tasks[0].completed, true);
+  assert.ok(board.tasks[0].checklist.every((s) => s.status === 'done' && s.completed));
 });
 
 test('updateChecklistItemKanbanStatus 拖拽子任务或孙任务只更新自身状态', () => {
@@ -1429,6 +1427,64 @@ test('toggleTaskCompleted 与 toggleChecklistItemCompleted 会刷新 completedAt
   // 在工作区中，任务1 排在任务2 前面
   const html = renderWorkspace(board, { expandedCompletedQuadrants: { importantUrgent: true } });
   assert.ok(html.indexOf('任务1') < html.indexOf('任务2'));
+});
+
+test('Kanban 视图中任务已完成步骤折叠收起、按时间倒序排列，并支持展开/收起切换', () => {
+  let board = addTask(createEmptyBoard('2026-11-16'), 'importantUrgent', '长春市一张图开发');
+  const taskId = board.tasks[0].id;
+  board = addChecklistItems(board, taskId, ['冬季房顶的雪去掉', 'onemap改进', '提升精模分辨率']);
+  const step1Id = board.tasks[0].checklist[0].id;
+  const step2Id = board.tasks[0].checklist[1].id;
+  const step3Id = board.tasks[0].checklist[2].id;
+
+  // 模拟按时间先后完成前两步：step1 (早), step2 (晚)
+  board.tasks[0].checklist = board.tasks[0].checklist.map((s) => {
+    if (s.id === step1Id) {
+      return { ...s, completed: true, status: 'done', completedAt: '2026-11-16T10:00:00.000Z' };
+    }
+    if (s.id === step2Id) {
+      return { ...s, completed: true, status: 'done', completedAt: '2026-11-16T10:30:00.000Z' };
+    }
+    return s;
+  });
+
+  // 整体拖拽任务至「今日计划」
+  board = updateTaskKanbanStatus(board, taskId, 'planned');
+  assert.equal(board.tasks[0].status, 'planned');
+  // 保持 step1 和 step2 的完成状态，未完成的 step3 流转为 planned
+  assert.equal(board.tasks[0].checklist.find((s) => s.id === step1Id).completed, true);
+  assert.equal(board.tasks[0].checklist.find((s) => s.id === step2Id).completed, true);
+  assert.equal(board.tasks[0].checklist.find((s) => s.id === step3Id).completed, false);
+  assert.equal(board.tasks[0].checklist.find((s) => s.id === step3Id).status, 'planned');
+
+  // 1. 默认展开任务步骤容器时，已完成步骤默认处于折叠状态 (is-collapsed)
+  const defaultHtml = renderWorkspace(board, {
+    viewMode: 'kanban',
+    expandedKanbanTasks: { [`planned:${taskId}`]: true },
+  });
+  // 未完成的活跃步骤显示在上方
+  assert.match(defaultHtml, /提升精模分辨率/);
+  // 已完成步骤在折叠区域中
+  assert.match(defaultHtml, /class="gtd-completed-section gtd-kanban-completed-section"/);
+  assert.match(defaultHtml, /data-gtd-action="toggle-kanban-completed-steps"/);
+  assert.match(defaultHtml, /已完成步骤 \(2\)/);
+  assert.match(defaultHtml, /class="gtd-completed-list gtd-kanban-completed-steps-list is-collapsed"/);
+  assert.match(defaultHtml, /style="display: none;"/);
+
+  // 2. 传入 expandedKanbanCompletedSteps 时，已完成步骤区域展开 (is-expanded)
+  const expandedHtml = renderWorkspace(board, {
+    viewMode: 'kanban',
+    expandedKanbanTasks: { [`planned:${taskId}`]: true },
+    expandedKanbanCompletedSteps: { [`planned:${taskId}`]: true },
+  });
+  assert.match(expandedHtml, /class="gtd-completed-list gtd-kanban-completed-steps-list is-expanded"/);
+  assert.match(expandedHtml, /已完成步骤 \(2\)/);
+
+  // 3. 验证已完成步骤按完成时间倒序排列：step2 (10:30) 位于 step1 (10:00) 之前
+  const idxStep2 = expandedHtml.indexOf('onemap改进');
+  const idxStep1 = expandedHtml.indexOf('冬季房顶的雪去掉');
+  assert.ok(idxStep2 !== -1 && idxStep1 !== -1);
+  assert.ok(idxStep2 < idxStep1, '后完成的步骤 onemap改进 必须排在先完成的 冬季房顶的雪去掉 之前');
 });
 
 
