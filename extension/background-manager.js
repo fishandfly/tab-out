@@ -202,8 +202,17 @@
     root.hidden = false;
   }
 
+  function ensureSceneryFrameLoaded(frame) {
+    if (frame && (!frame.src || frame.src === "about:blank" || !frame.src.includes("scenery/index.html"))) {
+      try {
+        frame.src = frame.dataset?.src || "scenery/index.html?screensaver=1";
+      } catch (_) {}
+    }
+  }
+
   function nextScenery() {
     const { frame } = getBackgroundSceneryElements();
+    ensureSceneryFrameLoaded(frame);
     if (frame?.contentWindow) {
       try {
         frame.contentWindow.postMessage({ type: "TABOUT_SCENERY_NEXT" }, "*");
@@ -213,6 +222,7 @@
 
   function prevScenery() {
     const { frame } = getBackgroundSceneryElements();
+    ensureSceneryFrameLoaded(frame);
     if (frame?.contentWindow) {
       try {
         frame.contentWindow.postMessage({ type: "TABOUT_SCENERY_PREV" }, "*");
@@ -222,6 +232,7 @@
 
   function selectScenery(index) {
     const { frame } = getBackgroundSceneryElements();
+    ensureSceneryFrameLoaded(frame);
     if (frame?.contentWindow) {
       try {
         frame.contentWindow.postMessage({ type: "TABOUT_SCENERY_SELECT", index }, "*");
@@ -543,6 +554,68 @@
     }
   }
 
+  function loadSceneryFrame(frame) {
+    if (!frame) return;
+    const targetSrc = frame.dataset?.src || frame.getAttribute("data-src") || frame.getAttribute("src") || "scenery/index.html?screensaver=1";
+    const isLoaded = frame.src && frame.src !== "about:blank" && frame.src.includes("scenery/index.html");
+    if (!isLoaded) {
+      const doLoad = () => {
+        try {
+          if (!frame.src || frame.src === "about:blank" || !frame.src.includes("scenery/index.html")) {
+            frame.src = targetSrc;
+          }
+        } catch (_) {}
+      };
+      if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(doLoad, { timeout: 350 });
+      } else if (typeof setTimeout === "function") {
+        setTimeout(doLoad, 60);
+      } else {
+        doLoad();
+      }
+    }
+  }
+
+  function attachVisibilityAndFocusListeners() {
+    if (typeof document !== "undefined" && !document.__tabOutSceneryVisibilityAttached) {
+      document.__tabOutSceneryVisibilityAttached = true;
+      document.addEventListener("visibilitychange", () => {
+        const { frame } = getBackgroundSceneryElements();
+        if (frame?.contentWindow) {
+          try {
+            frame.contentWindow.postMessage({
+              type: document.hidden ? "TABOUT_PAUSE_RENDER" : "TABOUT_RESUME_RENDER"
+            }, "*");
+          } catch (_) {}
+        }
+      });
+    }
+    if (typeof window !== "undefined" && !window.__tabOutSceneryBlurAttached) {
+      window.__tabOutSceneryBlurAttached = true;
+      window.addEventListener("blur", () => {
+        const { frame } = getBackgroundSceneryElements();
+        if (frame?.contentWindow) {
+          try {
+            frame.contentWindow.postMessage({
+              type: "TABOUT_THROTTLE_FPS",
+              interval: 66.6
+            }, "*");
+          } catch (_) {}
+        }
+      });
+      window.addEventListener("focus", () => {
+        const { frame } = getBackgroundSceneryElements();
+        if (frame?.contentWindow) {
+          try {
+            frame.contentWindow.postMessage({
+              type: "TABOUT_RESTORE_FPS"
+            }, "*");
+          } catch (_) {}
+        }
+      });
+    }
+  }
+
   function initDynamicBackground() {
     const { frame } = getBackgroundSceneryElements();
     const hasScenery = !!frame;
@@ -550,6 +623,9 @@
     if (hasScenery && document?.body) {
       document.body.classList.add("has-scenery-background");
       updateSceneryCredit({ name: "自然漫游", description: "正在生成山野景致..." });
+
+      loadSceneryFrame(frame);
+      attachVisibilityAndFocusListeners();
 
       if (!_messageListenerAttached && typeof window !== "undefined") {
         _messageListenerAttached = true;

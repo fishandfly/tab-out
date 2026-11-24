@@ -152,3 +152,33 @@ test('Scenery 背景预设全部为远景机位（高视点远眺与广角视野
   assert.match(gStr, /"cloudspire"/, '巡游预设包含雪峰云海俯瞰远景');
   assert.match(gStr, /"overlook"/, '巡游预设包含千嶂凭虚远景');
 });
+
+test('Scenery 背景与主页面支持首屏非阻塞异步加载、DPR 降采样、阴影关闭与 30FPS/后台节能休眠', () => {
+  const indexPath = path.resolve(__dirname, '../index.html');
+  const indexHtml = fs.readFileSync(indexPath, 'utf8');
+
+  assert.match(indexHtml, /loading="lazy"/, 'iframe 应配置 loading="lazy" 避免阻断主界面首屏渲染');
+  assert.match(indexHtml, /data-src="scenery\/index\.html\?screensaver=1"/, 'iframe 应使用 data-src 异步挂载屏保模式');
+
+  const jsPath = path.resolve(__dirname, '../scenery/app.js');
+  const jsContent = fs.readFileSync(jsPath, 'utf8');
+
+  // 1. 像素比降采样测试
+  assert.match(jsContent, /_isSaver\s*\?\s*Math\.min\(1\.0,\s*devicePixelRatio/, '屏保背景应限制 DPR <= 1.0 降低 GPU 像素填充率');
+
+  // 2. 阴影关闭与低能耗模式
+  assert.match(jsContent, /powerPreference:\s*_isSaverMode\s*\?\s*"low-power"/, '屏保背景应选用低功耗 GPU 首选项');
+  assert.match(jsContent, /shadowMap\.enabled\s*=\s*!_isSaverMode/, '屏保背景应关闭高开销的实时级联阴影贴图深度渲染通道');
+
+  // 3. 帧率节流至 30 FPS 及失焦降频
+  assert.match(jsContent, /_targetInterval\s*>\s*0\s*&&\s*_tabOutLastRenderTime/, '应基于时间戳对 3D 渲染帧率进行节流');
+  assert.match(jsContent, /TABOUT_PAUSE_RENDER/, '应支持隐藏或休眠时完全暂停 3D 渲染循环');
+  assert.match(jsContent, /TABOUT_THROTTLE_FPS/, '应支持窗口失焦时降频节流');
+
+  // 4. 背景管理器调度测试
+  const bgMgrPath = path.resolve(__dirname, '../background-manager.js');
+  const bgContent = fs.readFileSync(bgMgrPath, 'utf8');
+  assert.match(bgContent, /loadSceneryFrame/, '背景管理器应包含非阻塞异步挂载调度');
+  assert.match(bgContent, /visibilitychange/, '背景管理器应监听标签页显隐并通知暂停渲染');
+  assert.match(bgContent, /blur/, '背景管理器应监听窗口失焦并通知降低渲染负载');
+});
