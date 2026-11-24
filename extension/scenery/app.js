@@ -6705,21 +6705,21 @@ function _getSceneMeta(sceneId) {
 }
 var SCENERY_DURATION_SEC = 1800;
 var g_ = [
-  ["ridge-dawn", SCENERY_DURATION_SEC, 1.4, 78, 22],
-  ["cloudspire", SCENERY_DURATION_SEC, 1.2, 78, 28],
-  ["sunrise", SCENERY_DURATION_SEC, 1.3, 78, 24],
-  ["glacier", SCENERY_DURATION_SEC, 1.0, 76, 22],
-  ["fjord", SCENERY_DURATION_SEC, 1.1, 78, 26],
-  ["alps", SCENERY_DURATION_SEC, 0.9, 76, 22],
-  ["coast-dusk", SCENERY_DURATION_SEC, 1.4, 78, 24],
-  ["falls", SCENERY_DURATION_SEC, 0.8, 76, 24],
-  ["clear-sun", SCENERY_DURATION_SEC, 1.0, 78, 24],
-  ["snow", SCENERY_DURATION_SEC, 1.2, 78, 26],
-  ["alpine", SCENERY_DURATION_SEC, 1.1, 78, 28],
-  ["lake", SCENERY_DURATION_SEC, 0.9, 78, 22],
-  ["desert", SCENERY_DURATION_SEC, 1.0, 78, 25],
-  ["volcano", SCENERY_DURATION_SEC, 1.0, 76, 26],
-  ["overlook", SCENERY_DURATION_SEC, 1.2, 78, 28]
+  ["ridge-dawn", SCENERY_DURATION_SEC, 1.4, 78, 1.78],
+  ["cloudspire", SCENERY_DURATION_SEC, 1.2, 78, 1.82],
+  ["sunrise", SCENERY_DURATION_SEC, 1.3, 78, 1.78],
+  ["glacier", SCENERY_DURATION_SEC, 1.0, 76, 1.76],
+  ["fjord", SCENERY_DURATION_SEC, 1.1, 78, 1.80],
+  ["alps", SCENERY_DURATION_SEC, 0.9, 76, 1.78],
+  ["coast-dusk", SCENERY_DURATION_SEC, 1.4, 78, 1.82],
+  ["falls", SCENERY_DURATION_SEC, 0.8, 76, 1.76],
+  ["clear-sun", SCENERY_DURATION_SEC, 1.0, 78, 1.78],
+  ["snow", SCENERY_DURATION_SEC, 1.2, 78, 1.80],
+  ["alpine", SCENERY_DURATION_SEC, 1.1, 78, 1.82],
+  ["lake", SCENERY_DURATION_SEC, 0.9, 78, 1.76],
+  ["desert", SCENERY_DURATION_SEC, 1.0, 78, 1.80],
+  ["volcano", SCENERY_DURATION_SEC, 1.0, 76, 1.82],
+  ["overlook", SCENERY_DURATION_SEC, 1.2, 78, 1.80]
 ], x_ = 1.05, Md = .45;
 function Yx(n, t) {
   let e = g_.map(([c, u, f, customZoom, customEye]) => {
@@ -6735,7 +6735,7 @@ function Yx(n, t) {
       duration: u,
       drift: f,
       zoom: customZoom || d.view?.zoom || 78,
-      eyeHeight: customEye || d.view?.eyeHeight || 22
+      eyeHeight: customEye || d.view?.eyeHeight || 1.78
     };
   });
   let i = 0;
@@ -6747,6 +6747,7 @@ function Yx(n, t) {
     i = nextIdx;
   } catch (_) {}
   let o = 0, s = !0, r = !0;
+  let _smoothGroundH = null;
   function a(c) {
     o += c;
     let u = e[i];
@@ -6756,6 +6757,7 @@ function Yx(n, t) {
       u = e[i];
       o = 0;
       r = !0;
+      _smoothGroundH = null;
     }
     s = o < Md || o >= u.duration;
     return u;
@@ -6783,18 +6785,40 @@ function Yx(n, t) {
     window.__tabOutCurrentU = u;
     let f = a(c);
     window.__tabOutCurrentScene = f;
-    r && (u.hour = _getEffectiveHour(f.id, f.hour), u.season = f.season, u.weather = .02, r = !1, sendSceneNotify());
-    let d = Math.min(1, Math.max(0, (o - Md) / (f.duration - Md))),
-        p = t ? 0 : (Math.sin((d - .5) * Math.PI) * 0.75 + Math.sin(o * 0.07) * 0.25) * f.drift,
-        m = f.x + Math.cos(f.yaw) * p,
-        v = f.z - Math.sin(f.yaw) * p,
-        y = n.walkSample(m, v),
-        eyeH = f.eyeHeight ?? 22.0,
-        h = Math.max(y.height + eyeH, y.water + 12.0),
-        { camera: b } = u;
-    b.position.set(m, h, v);
-    let targetPitch = Math.max(-0.06, Math.min(0.18, f.pitch ?? 0.04));
-    b.rotation.set(targetPitch, f.yaw + p * .028, 0, "YXZ");
+    r && (u.hour = _getEffectiveHour(f.id, f.hour), u.season = f.season, u.weather = .02, r = !1, _smoothGroundH = null, sendSceneNotify());
+    let walkSpeed = 0.65;
+    let walkTime = Math.max(0, o - Md);
+    let walkDist = walkTime * walkSpeed;
+    let fwdX = -Math.sin(f.yaw);
+    let fwdZ = -Math.cos(f.yaw);
+    let rightX = Math.cos(f.yaw);
+    let rightZ = -Math.sin(f.yaw);
+    let trailSway = Math.sin(o * 0.035) * 3.2 + Math.sin(o * 0.012) * 1.6;
+    let m = f.x + fwdX * walkDist + rightX * trailSway;
+    let v = f.z + fwdZ * walkDist + rightZ * trailSway;
+    let y = n.walkSample(m, v);
+    if (_smoothGroundH === null) {
+      _smoothGroundH = y.height;
+    } else {
+      _smoothGroundH += (y.height - _smoothGroundH) * Math.min(1, c * 5.0);
+    }
+    let stepCycle = walkDist * 3.6;
+    let bobY = (Math.sin(stepCycle * 2) * 0.5 + 0.5) * 0.038 - 0.019;
+    let swayX = Math.cos(stepCycle) * 0.024;
+    let rollZ = -Math.sin(stepCycle) * 0.008;
+    let nodPitch = Math.cos(stepCycle * 2) * 0.005;
+    let breathY = Math.sin(o * 1.3) * 0.012;
+    let lookYaw = Math.sin(o * 0.06) * 0.065 + Math.sin(o * 0.018) * 0.035;
+    let lookPitch = Math.sin(o * 0.045) * 0.02;
+    let eyeH = f.eyeHeight ?? 1.78;
+    let finalY = Math.max(_smoothGroundH + eyeH + bobY + breathY, y.water + 0.8);
+    let finalX = m + rightX * swayX;
+    let finalZ = v + rightZ * swayX;
+    let { camera: b } = u;
+    b.position.set(finalX, finalY, finalZ);
+    let targetPitch = Math.max(-0.06, Math.min(0.22, (f.pitch ?? 0.04) + nodPitch + lookPitch));
+    let targetYaw = f.yaw + (trailSway * 0.006) + lookYaw;
+    b.rotation.set(targetPitch, targetYaw, rollZ, "YXZ");
     let E = f.zoom ?? 78;
     b.fov !== E && (b.fov = E, b.updateProjectionMatrix());
     b.updateMatrixWorld();
@@ -6804,7 +6828,7 @@ function Yx(n, t) {
       groundHeight: y.height,
       waterHeight: y.water,
       waterDepth: Math.max(0, y.water - y.height),
-      walkSpeed: 0,
+      walkSpeed: walkSpeed,
       diveDepth: 0,
       submersion: 0,
       cave: null,
@@ -6819,18 +6843,18 @@ function Yx(n, t) {
     next: () => {
       i = (i + 1) % e.length;
       try { localStorage.setItem("tabout_scenery_index", i); } catch (_) {}
-      o = 0; r = !0; s = !0; sendSceneNotify();
+      o = 0; r = !0; s = !0; _smoothGroundH = null; sendSceneNotify();
     },
     prev: () => {
       i = (i - 1 + e.length) % e.length;
       try { localStorage.setItem("tabout_scenery_index", i); } catch (_) {}
-      o = 0; r = !0; s = !0; sendSceneNotify();
+      o = 0; r = !0; s = !0; _smoothGroundH = null; sendSceneNotify();
     },
     setIndex: (idx) => {
       if (typeof idx === "number" && idx >= 0 && idx < e.length) {
         i = idx;
         try { localStorage.setItem("tabout_scenery_index", i); } catch (_) {}
-        o = 0; r = !0; s = !0; sendSceneNotify();
+        o = 0; r = !0; s = !0; _smoothGroundH = null; sendSceneNotify();
       }
     },
     getInfo: () => {
