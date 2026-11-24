@@ -62,6 +62,49 @@ body::before {
   z-index: 0;
 }
 
+.background-scenery-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 1;
+  transform: translateZ(0);
+  transition: opacity 0.8s ease;
+}
+
+.background-scenery-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(13, 22, 33, 0.24) 0%, rgba(9, 14, 23, 0.58) 100%),
+    linear-gradient(180deg, rgba(8, 12, 20, 0.32) 0%, rgba(8, 12, 20, 0.16) 40%, rgba(8, 12, 20, 0.5) 100%);
+}
+
+body.has-scenery-background .background-mesh {
+  opacity: 0.16;
+}
+
+body.has-scenery-background .background-orb {
+  opacity: 0.14;
+}
+
+body.has-scenery-background .background-ribbon {
+  opacity: 0.12;
+}
+
+body.has-scenery-background .background-grid {
+  opacity: 0.08;
+}
+
+body.has-scenery-background .background-photo {
+  display: none;
+}
+
 .background-mesh,
 .background-photo,
 .background-orb,

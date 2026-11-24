@@ -10,6 +10,15 @@
 </head>
 <body>
 <div class="background-stage" aria-hidden="true">
+  <iframe
+    class="background-scenery-frame"
+    id="backgroundSceneryFrame"
+    src="scenery/index.html?screensaver=1"
+    title="山息自然漫游动态背景"
+    tabindex="-1"
+    aria-hidden="true"
+  ></iframe>
+  <div class="background-scenery-overlay" id="backgroundSceneryOverlay"></div>
   <div class="background-photo" data-background-photo-layer="0"></div>
   <div class="background-photo" data-background-photo-layer="1"></div>
   <div class="background-mesh"></div>
@@ -142,8 +151,8 @@
   >
     查看原图
   </a>
-  <span class="background-credit-divider"></span>
-  <button class="background-credit-link" id="backgroundSwitchBtn" type="button">换图</button>
+  <span class="background-credit-divider" id="backgroundCreditDivider"></span>
+  <button class="background-credit-link" id="backgroundSwitchBtn" type="button">换景</button>
 </div>
 
 <div class="ai-assistant-root" id="aiAssistantRoot"></div>

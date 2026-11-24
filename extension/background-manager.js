@@ -93,6 +93,82 @@
     epic: '',
     sport: '',
   };
+  let _messageListenerAttached = false;
+  let _currentScenery = null;
+
+  function getBackgroundSceneryElements() {
+    return {
+      frame: typeof document !== 'undefined' ? document.getElementById('backgroundSceneryFrame') : null,
+      overlay: typeof document !== 'undefined' ? document.getElementById('backgroundSceneryOverlay') : null,
+    };
+  }
+
+  function getBackgroundCreditElements() {
+    return {
+      root: typeof document !== 'undefined' ? document.getElementById('backgroundCredit') : null,
+      label: typeof document !== 'undefined' ? document.getElementById('backgroundCreditLabel') : null,
+      link: typeof document !== 'undefined' ? document.getElementById('backgroundCreditLink') : null,
+      divider: typeof document !== 'undefined' ? document.getElementById('backgroundCreditDivider') : null,
+      switchBtn: typeof document !== 'undefined' ? document.getElementById('backgroundSwitchBtn') : null,
+    };
+  }
+
+  function updateSceneryCredit(scenery) {
+    const { root, label, link, divider, switchBtn } = getBackgroundCreditElements();
+    if (!root || !label) return;
+
+    const title = scenery?.name || '自然漫游';
+    label.textContent = `背景：山息 · ${title}`;
+    if (link) {
+      link.href = 'scenery/index.html';
+      link.textContent = '沉浸漫游';
+      link.title = '在新标签页中沉浸式自由探索山野';
+      link.hidden = false;
+    }
+    if (divider) divider.hidden = false;
+    if (switchBtn) {
+      switchBtn.textContent = '换景';
+      switchBtn.title = '切换到下一个自然景致';
+    }
+
+    const tooltipParts = [
+      title,
+      scenery?.description,
+      typeof scenery?.index === 'number' && typeof scenery?.total === 'number'
+        ? `(${scenery.index + 1}/${scenery.total})`
+        : '',
+    ].filter(Boolean);
+
+    root.title = tooltipParts.join(' · ');
+    root.hidden = false;
+  }
+
+  function nextScenery() {
+    const { frame } = getBackgroundSceneryElements();
+    if (frame?.contentWindow) {
+      try {
+        frame.contentWindow.postMessage({ type: 'TABOUT_SCENERY_NEXT' }, '*');
+      } catch (_) {}
+    }
+  }
+
+  function prevScenery() {
+    const { frame } = getBackgroundSceneryElements();
+    if (frame?.contentWindow) {
+      try {
+        frame.contentWindow.postMessage({ type: 'TABOUT_SCENERY_PREV' }, '*');
+      } catch (_) {}
+    }
+  }
+
+  function selectScenery(index) {
+    const { frame } = getBackgroundSceneryElements();
+    if (frame?.contentWindow) {
+      try {
+        frame.contentWindow.postMessage({ type: 'TABOUT_SCENERY_SELECT', index }, '*');
+      } catch (_) {}
+    }
+  }
 
   function pickRandomFromPool(items, excludePredicate = null) {
     if (!Array.isArray(items) || !items.length) return null;
@@ -132,16 +208,8 @@
     return Array.from(document.querySelectorAll('[data-background-photo-layer]'));
   }
 
-  function getBackgroundCreditElements() {
-    return {
-      root: document.getElementById('backgroundCredit'),
-      label: document.getElementById('backgroundCreditLabel'),
-      link: document.getElementById('backgroundCreditLink'),
-    };
-  }
-
   function updateBackgroundCredit(photo) {
-    const { root, label, link } = getBackgroundCreditElements();
+    const { root, label, link, divider, switchBtn } = getBackgroundCreditElements();
     if (!root || !label || !link) return;
 
     if (!photo?.pageUrl) {
@@ -154,6 +222,13 @@
 
     label.textContent = `背景：${photo.label}`;
     link.href = photo.pageUrl;
+    link.textContent = '查看原图';
+    link.title = '';
+    if (divider) divider.hidden = false;
+    if (switchBtn) {
+      switchBtn.textContent = '换图';
+      switchBtn.title = '';
+    }
     root.title = [photo.label, photo.resolution].filter(Boolean).join(' · ');
     root.hidden = false;
   }
@@ -370,6 +445,12 @@
   }
 
   async function rotateBackgroundScene() {
+    const { frame } = getBackgroundSceneryElements();
+    if (frame?.contentWindow && document.body?.classList?.contains('has-scenery-background')) {
+      nextScenery();
+      return;
+    }
+
     const nextTheme = getNextBackgroundTheme(document.body.dataset.bgTheme || '', _currentDirection);
     _currentDirection = nextTheme.direction;
 
@@ -399,6 +480,35 @@
   }
 
   function initDynamicBackground() {
+    const { frame } = getBackgroundSceneryElements();
+    const hasScenery = !!frame;
+
+    if (hasScenery && document?.body) {
+      document.body.classList.add('has-scenery-background');
+      updateSceneryCredit({ name: '自然漫游', description: '正在生成山野景致...' });
+
+      if (!_messageListenerAttached && typeof window !== 'undefined') {
+        _messageListenerAttached = true;
+        window.addEventListener('message', (event) => {
+          const data = event?.data;
+          if (!data || typeof data !== 'object') return;
+          if (data.type === 'TABOUT_SCENERY_CHANGE') {
+            _currentScenery = data;
+            updateSceneryCredit(data);
+          }
+        });
+      }
+
+      const switchBtn = document.getElementById('backgroundSwitchBtn');
+      if (switchBtn && !switchBtn.dataset.sceneryBound) {
+        switchBtn.dataset.sceneryBound = 'true';
+        switchBtn.addEventListener('click', () => {
+          nextScenery();
+        });
+      }
+      return;
+    }
+
     void rotateBackgroundScene();
     if (_themeRotationId) window.clearInterval(_themeRotationId);
     _themeRotationId = window.setInterval(() => {
@@ -406,7 +516,8 @@
     }, BACKGROUND_THEME_ROTATION_MS);
 
     const switchBtn = document.getElementById('backgroundSwitchBtn');
-    if (switchBtn) {
+    if (switchBtn && !switchBtn.dataset.sceneryBound) {
+      switchBtn.dataset.sceneryBound = 'true';
       switchBtn.addEventListener('click', () => {
         void rotateBackgroundScene();
       });
@@ -421,5 +532,10 @@
     applyBackgroundPhoto,
     getNextBackgroundDirection,
     getNextBackgroundTheme,
+    nextScenery,
+    prevScenery,
+    selectScenery,
+    updateSceneryCredit,
+    getSceneryInfo: () => _currentScenery,
   };
 });
