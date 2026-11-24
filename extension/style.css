@@ -17,7 +17,7 @@
   --status-active: #82b08f;
   --status-cooling: #e0bb74;
   --status-abandoned: #d88b8b;
-  --card-bg: rgba(15, 23, 35, 0.9);
+  --card-bg: rgba(15, 23, 35, 0.52);
   --shadow: rgba(0, 0, 0, 0.32);
   --font-ui: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
@@ -1536,9 +1536,9 @@ button.background-credit-link {
   min-height: 42px;
   max-height: 42px;
   padding: 4px 12px;
-  background: rgba(15, 23, 35, 0.72);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(15, 23, 35, 0.46);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 9px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
@@ -1839,7 +1839,9 @@ body.gtd-divider-dragging .gtd-panel-divider::before {
   font-size: 11px;
   line-height: 1;
   color: var(--muted);
-  background: rgba(15, 23, 35, 0.92);
+  background: rgba(15, 23, 35, 0.58);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 50%;
   cursor: pointer;
@@ -1850,7 +1852,7 @@ body.gtd-divider-dragging .gtd-panel-divider::before {
 .gtd-divider-toggle:hover {
   color: var(--accent-amber);
   border-color: var(--accent-amber);
-  background: rgba(26, 38, 57, 0.98);
+  background: rgba(26, 38, 57, 0.82);
   transform: scale(1.1);
 }
 
@@ -3551,7 +3553,7 @@ body.gtd-divider-dragging {
   max-height: min(720px, calc(100vh - 112px));
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 22px;
-  background: rgba(12, 18, 29, 0.94);
+  background: rgba(12, 18, 29, 0.72);
   color: #e7edf5;
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
   backdrop-filter: blur(22px);
@@ -3614,7 +3616,7 @@ body.gtd-divider-dragging {
     z-index: 1200;
     border: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 22px;
-    background: rgba(12, 18, 29, 0.95);
+    background: rgba(12, 18, 29, 0.72);
     color: #e7edf5;
     box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
     backdrop-filter: blur(22px);
@@ -4936,13 +4938,28 @@ body::before {
   body.has-background-photo .gtd-quadrant,
   body.has-background-photo .gtd-detail-card,
   body.has-background-photo .mission-card,
-  body.has-background-photo .tab-cleanup-banner {
-    background: rgba(15, 23, 35, 0.72);
+  body.has-background-photo .tab-cleanup-banner,
+  body.has-scenery-background .web-search-shell,
+  body.has-scenery-background .gtd-quadrant,
+  body.has-scenery-background .gtd-detail-card,
+  body.has-scenery-background .mission-card,
+  body.has-scenery-background .tab-cleanup-banner,
+  body.has-scenery-background .workspace-tabbar,
+  body.has-scenery-background .whiteboard-panel-shell,
+  body.has-scenery-background .notes-panel-shell,
+  body.has-scenery-background .structureboard-panel-shell,
+  body.has-scenery-background .backup-panel-shell,
+  body.has-scenery-background .memo-panel-shell {
+    background: rgba(15, 23, 35, 0.46);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
   }
 
   .background-credit {
     border-color: rgba(148, 163, 184, 0.16);
-    background: rgba(8, 13, 20, 0.62);
+    background: rgba(8, 13, 20, 0.42);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
   }
 
@@ -4956,18 +4973,24 @@ body::before {
   .gtd-detail-card,
   .mission-card {
     border-color: rgba(148, 163, 184, 0.16);
-    background: rgba(15, 23, 35, 0.88);
+    background: rgba(15, 23, 35, 0.52);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
     box-shadow: 0 22px 48px rgba(0, 0, 0, 0.28);
   }
 
   .gtd-shell-week .gtd-quadrant,
   .gtd-shell-week .gtd-detail-card {
-    background: rgba(18, 30, 50, 0.88);
+    background: rgba(18, 30, 50, 0.52);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
   }
 
   .gtd-shell-month .gtd-quadrant,
   .gtd-shell-month .gtd-detail-card {
-    background: rgba(15, 35, 30, 0.88);
+    background: rgba(15, 35, 30, 0.52);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
   }
 
   .whiteboard-embed-frame,
@@ -5006,11 +5029,13 @@ body::before {
 
   .backup-item {
     border-color: rgba(148, 163, 184, 0.12);
-    background: rgba(10, 16, 28, 0.6);
+    background: rgba(10, 16, 28, 0.38);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
 
   .backup-item:hover {
-    background: rgba(15, 23, 40, 0.9);
+    background: rgba(15, 23, 40, 0.62);
   }
 
   .backup-item-date {
@@ -5027,7 +5052,9 @@ body::before {
 
   .backup-btn {
     border-color: rgba(148, 163, 184, 0.16);
-    background: rgba(30, 41, 59, 0.78);
+    background: rgba(30, 41, 59, 0.52);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     color: #edf2f7;
   }
 
@@ -5038,7 +5065,9 @@ body::before {
 
   .backup-download-btn {
     border-color: rgba(148, 163, 184, 0.16);
-    background: rgba(30, 41, 59, 0.78);
+    background: rgba(30, 41, 59, 0.52);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     color: #edf2f7;
   }
 
@@ -5157,7 +5186,7 @@ body::before {
   .gtd-step-edit-form input,
   .archive-search {
     border-color: rgba(148, 163, 184, 0.18);
-    background: rgba(15, 23, 35, 0.76);
+    background: rgba(15, 23, 35, 0.46);
     color: var(--ink);
   }
 
@@ -5166,19 +5195,19 @@ body::before {
   .gtd-task-edit-form input:focus,
   .gtd-step-edit-form input:focus,
   .archive-search:focus {
-    background: rgba(15, 23, 35, 0.96);
+    background: rgba(15, 23, 35, 0.68);
   }
 
   .gtd-task-item,
   .gtd-step-item {
     border-color: rgba(148, 163, 184, 0.12);
-    background: rgba(30, 41, 59, 0.38);
+    background: rgba(30, 41, 59, 0.26);
   }
 
   .gtd-task-item:hover,
   .gtd-step-item:hover {
     border-color: rgba(148, 163, 184, 0.22);
-    background: rgba(30, 41, 59, 0.78);
+    background: rgba(30, 41, 59, 0.48);
   }
 
   .gtd-task-item.is-selected,
@@ -5199,25 +5228,27 @@ body::before {
 
   .gtd-completed-toggle {
     border-color: rgba(148, 163, 184, 0.16);
-    background: rgba(30, 41, 59, 0.42);
+    background: rgba(30, 41, 59, 0.30);
     color: rgba(203, 213, 225, 0.75);
   }
 
   .gtd-completed-toggle:hover {
     border-color: rgba(148, 163, 184, 0.32);
-    background: rgba(30, 41, 59, 0.82);
+    background: rgba(30, 41, 59, 0.52);
     color: #edf4ff;
   }
 
   .gtd-header-btn {
     color: #edf4ff;
-    background: linear-gradient(135deg, rgba(15, 23, 35, 0.84), rgba(30, 41, 59, 0.92));
+    background: linear-gradient(135deg, rgba(15, 23, 35, 0.52), rgba(30, 41, 59, 0.62));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-color: rgba(148, 163, 184, 0.24);
     box-shadow: 0 16px 34px rgba(0, 0, 0, 0.28);
   }
 
   .gtd-header-btn:hover {
-    background: linear-gradient(135deg, rgba(30, 41, 59, 0.92), rgba(51, 65, 85, 0.96));
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.68), rgba(51, 65, 85, 0.76));
     border-color: rgba(148, 163, 184, 0.34);
     box-shadow: 0 18px 38px rgba(0, 0, 0, 0.34);
   }
@@ -5265,7 +5296,9 @@ body::before {
   }
 
   .dialog-box {
-    background: rgba(15, 23, 35, 0.96);
+    background: rgba(15, 23, 35, 0.76);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(148, 163, 184, 0.16);
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
   }
@@ -5391,18 +5424,20 @@ body::before {
   /* 批量添加步骤面板 —— 暗色配色，与整体工作台一致 */
   .gtd-step-batch {
     border-color: rgba(148, 163, 184, 0.16);
-    background: rgba(10, 16, 28, 0.5);
+    background: rgba(10, 16, 28, 0.36);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
 
   .gtd-step-batch-textarea {
     border-color: rgba(148, 163, 184, 0.18);
-    background: rgba(15, 23, 35, 0.76);
+    background: rgba(15, 23, 35, 0.46);
     color: var(--ink);
   }
 
   .gtd-step-batch-textarea:focus {
     border-color: var(--accent-amber);
-    background: rgba(15, 23, 35, 0.96);
+    background: rgba(15, 23, 35, 0.68);
     box-shadow: 0 0 0 3px rgba(226, 164, 111, 0.12);
   }
 
@@ -5569,17 +5604,20 @@ body::before {
     display: flex;
     flex-direction: column;
     min-height: 480px;
-    background: rgba(15, 23, 42, 0.55);
+    background: rgba(15, 23, 42, 0.40);
     border: 1px solid rgba(148, 163, 184, 0.14);
     border-radius: 10px;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     transition: all 0.2s ease;
   }
 
-  body.has-background-photo .gtd-kanban-lane {
-    background: rgba(10, 16, 28, 0.65);
+  body.has-background-photo .gtd-kanban-lane,
+  body.has-scenery-background .gtd-kanban-lane {
+    background: rgba(10, 16, 28, 0.42);
     border-color: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
   }
 
   .gtd-kanban-lane::before {
@@ -5670,7 +5708,9 @@ body::before {
   }
 
   .gtd-kanban-group {
-    background: rgba(10, 16, 28, 0.5);
+    background: rgba(10, 16, 28, 0.34);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(148, 163, 184, 0.16);
     border-radius: 8px;
     padding: 9px;
@@ -6010,7 +6050,7 @@ body::before {
     gap: 6px;
     padding: 6px 8px;
     border-radius: 6px;
-    background: rgba(15, 23, 42, 0.6);
+    background: rgba(15, 23, 42, 0.38);
     border: 1px solid rgba(148, 163, 184, 0.14);
     cursor: grab;
     transition: all 0.15s ease;
@@ -6019,7 +6059,7 @@ body::before {
   }
 
   .gtd-kanban-step-card:hover {
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(15, 23, 42, 0.54);
     border-color: rgba(148, 163, 184, 0.3);
     transform: translateY(-1px);
   }
@@ -6121,7 +6161,7 @@ body::before {
     flex: 1;
     height: 34px;
     font-size: 13px;
-    background: rgba(15, 23, 42, 0.75);
+    background: rgba(15, 23, 42, 0.48);
     border: 1px solid rgba(148, 163, 184, 0.2);
     border-radius: 6px;
     color: #fff;
