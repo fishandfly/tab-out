@@ -6786,39 +6786,25 @@ function Yx(n, t) {
     let f = a(c);
     window.__tabOutCurrentScene = f;
     r && (u.hour = _getEffectiveHour(f.id, f.hour), u.season = f.season, u.weather = .02, r = !1, _smoothGroundH = null, sendSceneNotify());
-    let walkSpeed = 0.18;
+    let walkSpeed = 0.8;
     let walkTime = Math.max(0, o - Md);
     let walkDist = walkTime * walkSpeed;
     let fwdX = -Math.sin(f.yaw);
     let fwdZ = -Math.cos(f.yaw);
-    let rightX = Math.cos(f.yaw);
-    let rightZ = -Math.sin(f.yaw);
-    let trailSway = Math.sin(o * 0.018) * 1.8 + Math.sin(o * 0.006) * 0.9;
-    let m = f.x + fwdX * walkDist + rightX * trailSway;
-    let v = f.z + fwdZ * walkDist + rightZ * trailSway;
+    let m = f.x + fwdX * walkDist;
+    let v = f.z + fwdZ * walkDist;
     let y = n.walkSample(m, v);
     if (_smoothGroundH === null) {
       _smoothGroundH = y.height;
     } else {
-      _smoothGroundH += (y.height - _smoothGroundH) * Math.min(1, c * 5.0);
+      _smoothGroundH += (y.height - _smoothGroundH) * Math.min(1, c * 4.0);
     }
-    let stepCycle = walkDist * 7.2;
-    let bobY = (Math.sin(stepCycle * 2) * 0.5 + 0.5) * 0.022 - 0.011;
-    let swayX = Math.cos(stepCycle) * 0.015;
-    let rollZ = -Math.sin(stepCycle) * 0.0045;
-    let nodPitch = Math.cos(stepCycle * 2) * 0.003;
-    let breathY = Math.sin(o * 0.9) * 0.009;
-    let lookYaw = Math.sin(o * 0.03) * 0.045 + Math.sin(o * 0.01) * 0.025;
-    let lookPitch = Math.sin(o * 0.025) * 0.015;
     let eyeH = f.eyeHeight ?? 1.78;
-    let finalY = Math.max(_smoothGroundH + eyeH + bobY + breathY, y.water + 0.8);
-    let finalX = m + rightX * swayX;
-    let finalZ = v + rightZ * swayX;
+    let finalY = Math.max(_smoothGroundH + eyeH, y.water + 0.8);
     let { camera: b } = u;
-    b.position.set(finalX, finalY, finalZ);
-    let targetPitch = Math.max(-0.06, Math.min(0.22, (f.pitch ?? 0.04) + nodPitch + lookPitch));
-    let targetYaw = f.yaw + (trailSway * 0.006) + lookYaw;
-    b.rotation.set(targetPitch, targetYaw, rollZ, "YXZ");
+    b.position.set(m, finalY, v);
+    let targetPitch = Math.max(-0.06, Math.min(0.22, f.pitch ?? 0.04));
+    b.rotation.set(targetPitch, f.yaw, 0, "YXZ");
     let E = f.zoom ?? 78;
     b.fov !== E && (b.fov = E, b.updateProjectionMatrix());
     b.updateMatrixWorld();

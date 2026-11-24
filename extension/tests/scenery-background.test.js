@@ -183,26 +183,23 @@ test('Scenery 背景与主页面支持首屏非阻塞异步加载、DPR 降采�
   assert.match(bgContent, /blur/, '背景管理器应监听窗口失焦并通知降低渲染负载');
 });
 
-test('Scenery 自动漫游支持第一人称真实步行感（人体视高、前向小径推进、双足步频起伏与左右重心摇曳）', () => {
+test('Scenery 自动漫游支持平稳前向推进（从远到近走进，平直视平线，无步态摇晃与颠簸）', () => {
   const jsPath = path.resolve(__dirname, '../scenery/app.js');
   const jsContent = fs.readFileSync(jsPath, 'utf8');
 
   // 1. 人体第一人称视高设置
   assert.match(jsContent, /eyeHeight:\s*customEye\s*\|\|\s*d\.view\?\.eyeHeight\s*\|\|\s*1\.78/, '默认视高应为人眼高度 ~1.78m');
 
-  // 2. 真实前向小径行走与路径曲率
-  assert.match(jsContent, /walkSpeed\s*=\s*0\.18/, '漫游时应具有适宜山野慢步闲庭信步的平缓速度');
-  assert.match(jsContent, /fwdX\s*=\s*-Math\.sin\(f\.yaw\)/, '应沿航向向量持续向前迈步');
-  assert.match(jsContent, /trailSway\s*=/, '应随山径小道自然蜿蜒曲率漫步');
+  // 2. 稳步前向推进（从远到近走进，无起伏摆动）
+  assert.match(jsContent, /walkSpeed\s*=\s*0\.8/, '漫游时应具有适宜由远及近推进的平稳步速');
+  assert.match(jsContent, /fwdX\s*=\s*-Math\.sin\(f\.yaw\)/, '应沿航向向量持续向前稳步走进');
+  assert.match(jsContent, /m\s*=\s*f\.x\s*\+\s*fwdX\s*\*\s*walkDist/, '应沿前向视线直线推进');
 
-  // 3. 人体双足步态生物力学节律
-  assert.match(jsContent, /stepCycle\s*=\s*walkDist\s*\*\s*7\.2/, '应依据前进步距计算舒缓的人体慢步双足节律');
-  assert.match(jsContent, /bobY\s*=/, '应模拟每步着地与蹬伸的第一人称垂直步态起伏');
-  assert.match(jsContent, /swayX\s*=/, '应模拟左右脚移步交替时的重心侧向偏摆');
-  assert.match(jsContent, /rollZ\s*=/, '应模拟步行时头颈的侧倾补偿角');
-  assert.match(jsContent, /nodPitch\s*=/, '应模拟每步行进的微点头仰俯微动');
-  assert.match(jsContent, /_smoothGroundH/, '地势高度应平滑过渡以呈现真实脚步行走质感');
+  // 3. 画面无步态颠簸摇摆，保持平稳推镜头
+  assert.doesNotMatch(jsContent, /bobY\s*=/, '不得模拟起伏颠簸步态');
+  assert.doesNotMatch(jsContent, /swayX\s*=/, '不得模拟左右摇摆');
+  assert.match(jsContent, /_smoothGroundH/, '地势高度应平滑过渡以呈现平稳推镜头质感');
 
   // 4. 生态状态反馈
-  assert.match(jsContent, /walkSpeed:\s*walkSpeed/, '漫游时应将真实步速传递至环境生态');
+  assert.match(jsContent, /walkSpeed:\s*walkSpeed/, '漫游时应将推进步速传递至环境生态');
 });
