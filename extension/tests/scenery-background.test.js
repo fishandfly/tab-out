@@ -191,12 +191,12 @@ test('Scenery 自动漫游支持第一人称真实步行感（人体视高、前
   assert.match(jsContent, /eyeHeight:\s*customEye\s*\|\|\s*d\.view\?\.eyeHeight\s*\|\|\s*1\.78/, '默认视高应为人眼高度 ~1.78m');
 
   // 2. 真实前向小径行走与路径曲率
-  assert.match(jsContent, /walkSpeed\s*=\s*0\.65/, '漫游时应具有适宜山野徒步的自然行进速度');
+  assert.match(jsContent, /walkSpeed\s*=\s*0\.18/, '漫游时应具有适宜山野慢步闲庭信步的平缓速度');
   assert.match(jsContent, /fwdX\s*=\s*-Math\.sin\(f\.yaw\)/, '应沿航向向量持续向前迈步');
   assert.match(jsContent, /trailSway\s*=/, '应随山径小道自然蜿蜒曲率漫步');
 
   // 3. 人体双足步态生物力学节律
-  assert.match(jsContent, /stepCycle\s*=\s*walkDist\s*\*\s*3\.6/, '应依据前进步距计算人体双足步频周期');
+  assert.match(jsContent, /stepCycle\s*=\s*walkDist\s*\*\s*7\.2/, '应依据前进步距计算舒缓的人体慢步双足节律');
   assert.match(jsContent, /bobY\s*=/, '应模拟每步着地与蹬伸的第一人称垂直步态起伏');
   assert.match(jsContent, /swayX\s*=/, '应模拟左右脚移步交替时的重心侧向偏摆');
   assert.match(jsContent, /rollZ\s*=/, '应模拟步行时头颈的侧倾补偿角');
