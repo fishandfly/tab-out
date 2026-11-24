@@ -137,3 +137,18 @@ test('Scenery 背景换景周期为 30 分钟，且支持刷新/新开页面换�
   const bgContent = fs.readFileSync(bgMgrPath, 'utf8');
   assert.match(bgContent, /BACKGROUND_THEME_ROTATION_MS\s*=\s*30\s*\*\s*60\s*\*\s*1000/, '后台壁纸轮换周期应同步调整为 30 分钟');
 });
+
+test('Scenery 背景预设全部为远景机位（高视点远眺与广角视野）', () => {
+  const jsPath = path.resolve(__dirname, '../scenery/app.js');
+  const jsContent = fs.readFileSync(jsPath, 'utf8');
+
+  assert.match(jsContent, /eyeHeight/, '机位高度应支持抬升至树冠之上的远景视点');
+  const gMatch = jsContent.match(/var g_\s*=\s*(\[[\s\S]*?\]),\s*x_\s*=/);
+  assert.ok(gMatch, '应存在 g_ 巡游预设列表');
+  const gStr = gMatch[1];
+  assert.doesNotMatch(gStr, /"grove-light"/, '巡游预设应剔除林间近景');
+  assert.doesNotMatch(gStr, /"forest"/, '巡游预设应剔除树干遮挡近景');
+  assert.doesNotMatch(gStr, /"sea-window"/, '巡游预设应剔除水下局促视窗');
+  assert.match(gStr, /"cloudspire"/, '巡游预设包含雪峰云海俯瞰远景');
+  assert.match(gStr, /"overlook"/, '巡游预设包含千嶂凭虚远景');
+});
