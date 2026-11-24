@@ -6786,7 +6786,7 @@ function Yx(n, t) {
     let f = a(c);
     window.__tabOutCurrentScene = f;
     r && (u.hour = _getEffectiveHour(f.id, f.hour), u.season = f.season, u.weather = .02, r = !1, _smoothGroundH = null, sendSceneNotify());
-    let walkSpeed = 0.8;
+    let walkSpeed = 0.4;
     let walkTime = Math.max(0, o - Md);
     let walkDist = walkTime * walkSpeed;
     let fwdX = -Math.sin(f.yaw);

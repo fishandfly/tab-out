@@ -191,7 +191,7 @@ test('Scenery 自动漫游支持平稳前向推进（从远到近走进，平直
   assert.match(jsContent, /eyeHeight:\s*customEye\s*\|\|\s*d\.view\?\.eyeHeight\s*\|\|\s*1\.78/, '默认视高应为人眼高度 ~1.78m');
 
   // 2. 稳步前向推进（从远到近走进，无起伏摆动）
-  assert.match(jsContent, /walkSpeed\s*=\s*0\.8/, '漫游时应具有适宜由远及近推进的平稳步速');
+  assert.match(jsContent, /walkSpeed\s*=\s*0\.4/, '漫游时应具有适宜由远及近推进的平稳步速');
   assert.match(jsContent, /fwdX\s*=\s*-Math\.sin\(f\.yaw\)/, '应沿航向向量持续向前稳步走进');
   assert.match(jsContent, /m\s*=\s*f\.x\s*\+\s*fwdX\s*\*\s*walkDist/, '应沿前向视线直线推进');
 
