@@ -202,4 +202,9 @@ test('Scenery 自动漫游支持平稳前向推进（从远到近走进，平直
 
   // 4. 生态状态反馈
   assert.match(jsContent, /walkSpeed:\s*walkSpeed/, '漫游时应将推进步速传递至环境生态');
+
+  // 5. 长时间平稳防抖（有界平滑推进、垂直高度速率限幅与 30FPS 帧率节流容差）
+  assert.match(jsContent, /maxTravel/, '推镜头行程应合理有界避免长时游走落入碎石悬崖导致抖动');
+  assert.match(jsContent, /clampedStep/, '垂直地势跟踪应具备最大步进限幅以消除地势突变抖动');
+  assert.match(jsContent, /_targetInterval\s*-\s*4/, '帧率节流应具备容差阈值消除 60Hz 屏幕帧间隔抖动');
 });
