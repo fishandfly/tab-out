@@ -125,3 +125,15 @@ test('TabOutBackgroundManager 支持日间/夜暮/自动光照模式切换与持
   assert.equal(TabOutBackgroundManager.getLightingMode(), 'auto');
   assert.match(mockLightingBtn.textContent, /自动/);
 });
+
+test('Scenery 背景换景周期为 30 分钟，且支持刷新/新开页面换景持久化流转', () => {
+  const jsPath = path.resolve(__dirname, '../scenery/app.js');
+  const jsContent = fs.readFileSync(jsPath, 'utf8');
+
+  assert.match(jsContent, /SCENERY_DURATION_SEC\s*=\s*1800/, '单场景漫游时长应为 1800 秒（30 分钟）');
+  assert.match(jsContent, /tabout_scenery_index/, '应使用 tabout_scenery_index 记录景致序号');
+
+  const bgMgrPath = path.resolve(__dirname, '../background-manager.js');
+  const bgContent = fs.readFileSync(bgMgrPath, 'utf8');
+  assert.match(bgContent, /BACKGROUND_THEME_ROTATION_MS\s*=\s*30\s*\*\s*60\s*\*\s*1000/, '后台壁纸轮换周期应同步调整为 30 分钟');
+});

@@ -21,7 +21,7 @@
   };
 
   const BACKGROUND_THEME_DIRECTIONS = ['epic', 'sport'];
-  const BACKGROUND_THEME_ROTATION_MS = 90 * 1000;
+  const BACKGROUND_THEME_ROTATION_MS = 30 * 60 * 1000; // 30 minutes
   const BACKGROUND_REMOTE_API_URL = 'https://wallhaven.cc/api/v1/search';
   const BACKGROUND_DIRECT_FALLBACK_ROOT = 'https://loremflickr.com/2400/1350';
   const BACKGROUND_REMOTE_FETCH_TIMEOUT_MS = 12000;
