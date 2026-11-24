@@ -92,3 +92,36 @@ test('TabOutBackgroundManager 支持 Scenery 景致更新与控制', () => {
   assert.equal(mockSwitchBtn.textContent, '换景');
   assert.equal(mockLink.textContent, '沉浸漫游');
 });
+
+test('TabOutBackgroundManager 支持日间/夜暮/自动光照模式切换与持久化', () => {
+  assert.equal(typeof TabOutBackgroundManager.getLightingMode, 'function');
+  assert.equal(typeof TabOutBackgroundManager.setLightingMode, 'function');
+  assert.equal(typeof TabOutBackgroundManager.cycleLightingMode, 'function');
+
+  const mockLightingBtn = { textContent: '', title: '', hidden: false };
+  const mockDataset = {};
+  global.document = {
+    getElementById: (id) => {
+      if (id === 'backgroundLightingBtn') return mockLightingBtn;
+      return null;
+    },
+    body: {
+      dataset: mockDataset,
+      classList: { contains: () => true, add: () => {} }
+    }
+  };
+
+  TabOutBackgroundManager.setLightingMode('day');
+  assert.equal(TabOutBackgroundManager.getLightingMode(), 'day');
+  assert.equal(mockDataset.sceneryLighting, 'day');
+  assert.match(mockLightingBtn.textContent, /日间/);
+
+  TabOutBackgroundManager.setLightingMode('night');
+  assert.equal(TabOutBackgroundManager.getLightingMode(), 'night');
+  assert.equal(mockDataset.sceneryLighting, 'night');
+  assert.match(mockLightingBtn.textContent, /夜暮/);
+
+  TabOutBackgroundManager.setLightingMode('auto');
+  assert.equal(TabOutBackgroundManager.getLightingMode(), 'auto');
+  assert.match(mockLightingBtn.textContent, /自动/);
+});

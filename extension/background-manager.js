@@ -95,51 +95,110 @@
   };
   let _messageListenerAttached = false;
   let _currentScenery = null;
+  let _lightingMode = (typeof localStorage !== "undefined" && localStorage.getItem("tabout_scenery_lighting")) || "auto";
+
+  function isDaytimeNow() {
+    const now = new Date();
+    const h = now.getHours() + now.getMinutes() / 60;
+    return h >= 6.5 && h < 18.5;
+  }
 
   function getBackgroundSceneryElements() {
     return {
-      frame: typeof document !== 'undefined' ? document.getElementById('backgroundSceneryFrame') : null,
-      overlay: typeof document !== 'undefined' ? document.getElementById('backgroundSceneryOverlay') : null,
+      frame: typeof document !== "undefined" ? document.getElementById("backgroundSceneryFrame") : null,
+      overlay: typeof document !== "undefined" ? document.getElementById("backgroundSceneryOverlay") : null,
     };
   }
 
   function getBackgroundCreditElements() {
     return {
-      root: typeof document !== 'undefined' ? document.getElementById('backgroundCredit') : null,
-      label: typeof document !== 'undefined' ? document.getElementById('backgroundCreditLabel') : null,
-      link: typeof document !== 'undefined' ? document.getElementById('backgroundCreditLink') : null,
-      divider: typeof document !== 'undefined' ? document.getElementById('backgroundCreditDivider') : null,
-      switchBtn: typeof document !== 'undefined' ? document.getElementById('backgroundSwitchBtn') : null,
+      root: typeof document !== "undefined" ? document.getElementById("backgroundCredit") : null,
+      label: typeof document !== "undefined" ? document.getElementById("backgroundCreditLabel") : null,
+      link: typeof document !== "undefined" ? document.getElementById("backgroundCreditLink") : null,
+      divider: typeof document !== "undefined" ? (document.getElementById("backgroundCreditDivider") || document.getElementById("backgroundCreditDivider1")) : null,
+      divider2: typeof document !== "undefined" ? document.getElementById("backgroundCreditDivider2") : null,
+      lightingBtn: typeof document !== "undefined" ? document.getElementById("backgroundLightingBtn") : null,
+      switchBtn: typeof document !== "undefined" ? document.getElementById("backgroundSwitchBtn") : null,
     };
   }
 
+  function updateLightingButtonDisplay() {
+    const { lightingBtn, divider2 } = getBackgroundCreditElements();
+    if (!lightingBtn) return;
+    const isDay = isDaytimeNow();
+    if (divider2) divider2.hidden = false;
+    lightingBtn.hidden = false;
+
+    if (_lightingMode === "day") {
+      lightingBtn.textContent = "☀️ 日间";
+      lightingBtn.title = "日照模式：日间常亮 (点击切换为夜暮)";
+    } else if (_lightingMode === "night") {
+      lightingBtn.textContent = "🌙 夜暮";
+      lightingBtn.title = "日照模式：静谧夜景 (点击切换为时间同步)";
+    } else {
+      lightingBtn.textContent = isDay ? "☀️ 自动" : "🌙 自动";
+      lightingBtn.title = `日照模式：时间同步[${isDay ? "日间" : "夜暮"}] (点击切换为锁定日间)`;
+    }
+  }
+
+  function applyLightingMode(mode) {
+    _lightingMode = ["day", "night", "auto"].includes(mode) ? mode : "auto";
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("tabout_scenery_lighting", _lightingMode);
+      }
+    } catch (_) {}
+
+    const isDay = isDaytimeNow();
+    const effective = _lightingMode === "day" ? "day" : _lightingMode === "night" ? "night" : (isDay ? "day" : "night");
+    if (typeof document !== "undefined" && document.body) {
+      document.body.dataset.sceneryLighting = effective;
+    }
+
+    updateLightingButtonDisplay();
+
+    const { frame } = getBackgroundSceneryElements();
+    if (frame?.contentWindow) {
+      try {
+        frame.contentWindow.postMessage({ type: "TABOUT_SET_LIGHTING", mode: _lightingMode }, "*");
+      } catch (_) {}
+    }
+  }
+
+  function cycleLightingMode() {
+    const next = _lightingMode === "auto" ? "day" : _lightingMode === "day" ? "night" : "auto";
+    applyLightingMode(next);
+  }
+
   function updateSceneryCredit(scenery) {
-    const { root, label, link, divider, switchBtn } = getBackgroundCreditElements();
+    const { root, label, link, divider, divider2, lightingBtn, switchBtn } = getBackgroundCreditElements();
     if (!root || !label) return;
 
-    const title = scenery?.name || '自然漫游';
+    const title = scenery?.name || "自然漫游";
     label.textContent = `背景：山息 · ${title}`;
     if (link) {
-      link.href = 'scenery/index.html';
-      link.textContent = '沉浸漫游';
-      link.title = '在新标签页中沉浸式自由探索山野';
+      link.href = "scenery/index.html";
+      link.textContent = "沉浸漫游";
+      link.title = "在新标签页中沉浸式自由探索山野";
       link.hidden = false;
     }
     if (divider) divider.hidden = false;
+    if (divider2) divider2.hidden = false;
+    if (lightingBtn) updateLightingButtonDisplay();
     if (switchBtn) {
-      switchBtn.textContent = '换景';
-      switchBtn.title = '切换到下一个自然景致';
+      switchBtn.textContent = "换景";
+      switchBtn.title = "切换到下一个自然景致";
     }
 
     const tooltipParts = [
       title,
       scenery?.description,
-      typeof scenery?.index === 'number' && typeof scenery?.total === 'number'
+      typeof scenery?.index === "number" && typeof scenery?.total === "number"
         ? `(${scenery.index + 1}/${scenery.total})`
-        : '',
+        : "",
     ].filter(Boolean);
 
-    root.title = tooltipParts.join(' · ');
+    root.title = tooltipParts.join(" · ");
     root.hidden = false;
   }
 
@@ -147,7 +206,7 @@
     const { frame } = getBackgroundSceneryElements();
     if (frame?.contentWindow) {
       try {
-        frame.contentWindow.postMessage({ type: 'TABOUT_SCENERY_NEXT' }, '*');
+        frame.contentWindow.postMessage({ type: "TABOUT_SCENERY_NEXT" }, "*");
       } catch (_) {}
     }
   }
@@ -156,7 +215,7 @@
     const { frame } = getBackgroundSceneryElements();
     if (frame?.contentWindow) {
       try {
-        frame.contentWindow.postMessage({ type: 'TABOUT_SCENERY_PREV' }, '*');
+        frame.contentWindow.postMessage({ type: "TABOUT_SCENERY_PREV" }, "*");
       } catch (_) {}
     }
   }
@@ -165,10 +224,11 @@
     const { frame } = getBackgroundSceneryElements();
     if (frame?.contentWindow) {
       try {
-        frame.contentWindow.postMessage({ type: 'TABOUT_SCENERY_SELECT', index }, '*');
+        frame.contentWindow.postMessage({ type: "TABOUT_SCENERY_SELECT", index }, "*");
       } catch (_) {}
     }
   }
+
 
   function pickRandomFromPool(items, excludePredicate = null) {
     if (!Array.isArray(items) || !items.length) return null;
@@ -209,10 +269,13 @@
   }
 
   function updateBackgroundCredit(photo) {
-    const { root, label, link, divider, switchBtn } = getBackgroundCreditElements();
+    const { root, label, link, divider, divider2, lightingBtn, switchBtn } = getBackgroundCreditElements();
     if (!root || !label || !link) return;
 
     if (!photo?.pageUrl) {
+      if (typeof document !== "undefined" && document.body?.classList?.contains("has-scenery-background")) {
+        return;
+      }
       root.hidden = true;
       label.textContent = '';
       link.href = '#';
@@ -225,6 +288,8 @@
     link.textContent = '查看原图';
     link.title = '';
     if (divider) divider.hidden = false;
+    if (divider2) divider2.hidden = true;
+    if (lightingBtn) lightingBtn.hidden = true;
     if (switchBtn) {
       switchBtn.textContent = '换图';
       switchBtn.title = '';
@@ -446,11 +511,10 @@
 
   async function rotateBackgroundScene() {
     const { frame } = getBackgroundSceneryElements();
-    if (frame?.contentWindow && document.body?.classList?.contains('has-scenery-background')) {
+    if (frame || (typeof document !== "undefined" && document.body?.classList?.contains("has-scenery-background"))) {
       nextScenery();
       return;
     }
-
     const nextTheme = getNextBackgroundTheme(document.body.dataset.bgTheme || '', _currentDirection);
     _currentDirection = nextTheme.direction;
 
@@ -484,31 +548,40 @@
     const hasScenery = !!frame;
 
     if (hasScenery && document?.body) {
-      document.body.classList.add('has-scenery-background');
-      updateSceneryCredit({ name: '自然漫游', description: '正在生成山野景致...' });
+      document.body.classList.add("has-scenery-background");
+      updateSceneryCredit({ name: "自然漫游", description: "正在生成山野景致..." });
 
-      if (!_messageListenerAttached && typeof window !== 'undefined') {
+      if (!_messageListenerAttached && typeof window !== "undefined") {
         _messageListenerAttached = true;
-        window.addEventListener('message', (event) => {
+        window.addEventListener("message", (event) => {
           const data = event?.data;
-          if (!data || typeof data !== 'object') return;
-          if (data.type === 'TABOUT_SCENERY_CHANGE') {
+          if (!data || typeof data !== "object") return;
+          if (data.type === "TABOUT_SCENERY_CHANGE") {
             _currentScenery = data;
             updateSceneryCredit(data);
           }
         });
       }
 
-      const switchBtn = document.getElementById('backgroundSwitchBtn');
+      applyLightingMode(_lightingMode);
+
+      const lightingBtn = document.getElementById("backgroundLightingBtn");
+      if (lightingBtn && !lightingBtn.dataset.lightingBound) {
+        lightingBtn.dataset.lightingBound = "true";
+        lightingBtn.addEventListener("click", () => {
+          cycleLightingMode();
+        });
+      }
+
+      const switchBtn = document.getElementById("backgroundSwitchBtn");
       if (switchBtn && !switchBtn.dataset.sceneryBound) {
-        switchBtn.dataset.sceneryBound = 'true';
-        switchBtn.addEventListener('click', () => {
+        switchBtn.dataset.sceneryBound = "true";
+        switchBtn.addEventListener("click", () => {
           nextScenery();
         });
       }
       return;
     }
-
     void rotateBackgroundScene();
     if (_themeRotationId) window.clearInterval(_themeRotationId);
     _themeRotationId = window.setInterval(() => {
@@ -516,8 +589,7 @@
     }, BACKGROUND_THEME_ROTATION_MS);
 
     const switchBtn = document.getElementById('backgroundSwitchBtn');
-    if (switchBtn && !switchBtn.dataset.sceneryBound) {
-      switchBtn.dataset.sceneryBound = 'true';
+    if (switchBtn) {
       switchBtn.addEventListener('click', () => {
         void rotateBackgroundScene();
       });
@@ -537,5 +609,8 @@
     selectScenery,
     updateSceneryCredit,
     getSceneryInfo: () => _currentScenery,
+    getLightingMode: () => _lightingMode,
+    setLightingMode: applyLightingMode,
+    cycleLightingMode,
   };
 });

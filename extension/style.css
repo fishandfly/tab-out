@@ -71,8 +71,9 @@ body::before {
   pointer-events: none;
   z-index: 1;
   opacity: 1;
+  filter: brightness(var(--scenery-brightness, 1.05)) contrast(var(--scenery-contrast, 1.02));
   transform: translateZ(0);
-  transition: opacity 0.8s ease;
+  transition: opacity 0.8s ease, filter 0.6s ease;
 }
 
 .background-scenery-overlay {
@@ -80,27 +81,32 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: 2;
-  background:
-    radial-gradient(circle at 50% 38%, rgba(13, 22, 33, 0.24) 0%, rgba(9, 14, 23, 0.58) 100%),
-    linear-gradient(180deg, rgba(8, 12, 20, 0.32) 0%, rgba(8, 12, 20, 0.16) 40%, rgba(8, 12, 20, 0.5) 100%);
+  background: var(
+    --scenery-overlay,
+    radial-gradient(circle at 50% 38%, rgba(13, 22, 33, 0.02) 0%, rgba(9, 14, 23, 0.20) 100%)
+  );
+  transition: background 0.6s ease;
 }
 
-body.has-scenery-background .background-mesh {
-  opacity: 0.16;
+/* Light & vibrant daytime mode */
+body[data-scenery-lighting="day"],
+body:not([data-scenery-lighting="night"]) {
+  --scenery-brightness: 1.06;
+  --scenery-contrast: 1.02;
+  --scenery-overlay: radial-gradient(circle at 50% 38%, rgba(13, 22, 33, 0.02) 0%, rgba(9, 14, 23, 0.20) 100%);
 }
 
-body.has-scenery-background .background-orb {
-  opacity: 0.14;
+/* Atmospheric evening/night mode */
+body[data-scenery-lighting="night"] {
+  --scenery-brightness: 0.94;
+  --scenery-contrast: 1.05;
+  --scenery-overlay: radial-gradient(circle at 50% 38%, rgba(11, 17, 30, 0.18) 0%, rgba(7, 11, 20, 0.48) 100%);
 }
 
-body.has-scenery-background .background-ribbon {
-  opacity: 0.12;
-}
-
-body.has-scenery-background .background-grid {
-  opacity: 0.08;
-}
-
+body.has-scenery-background .background-mesh,
+body.has-scenery-background .background-orb,
+body.has-scenery-background .background-ribbon,
+body.has-scenery-background .background-grid,
 body.has-scenery-background .background-photo {
   display: none;
 }
@@ -944,7 +950,7 @@ header {
   position: fixed;
   right: 24px;
   bottom: 20px;
-  z-index: 3;
+  z-index: 100;
   display: inline-flex;
   align-items: center;
   gap: 10px;
