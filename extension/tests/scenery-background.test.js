@@ -207,4 +207,8 @@ test('Scenery 自动漫游支持平稳前向推进（从远到近走进，平直
   assert.match(jsContent, /maxTravel/, '推镜头行程应合理有界避免长时游走落入碎石悬崖导致抖动');
   assert.match(jsContent, /clampedStep/, '垂直地势跟踪应具备最大步进限幅以消除地势突变抖动');
   assert.match(jsContent, /_targetInterval\s*-\s*4/, '帧率节流应具备容差阈值消除 60Hz 屏幕帧间隔抖动');
+
+  // 6. 湖泊平面镜面反射与浅滩水底折射需与运动机位逐帧同步，避免倒影滞后跳变抖动
+  assert.match(jsContent, /_camChanged/, '湖面实时反射应在机位移动或旋转时逐帧同步更新，防止倒影滞后跳变');
+  assert.match(jsContent, /z\.distanceToSquared\(V\.position\)<1e-7/, '浅湖折射采样应与机位位移紧密同步');
 });
